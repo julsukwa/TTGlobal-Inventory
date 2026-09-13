@@ -1,0 +1,247 @@
+.topbar {
+  height: 70px;
+
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 0 24px;
+
+  flex-shrink: 0;
+}
+
+/* =========================
+   LEFT
+========================= */
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hamburger-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  color: #475569;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: 0.2s ease;
+}
+
+.hamburger-btn:hover {
+  background: #f8fafc;
+}
+
+.topbar-logo {
+  display: none;
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.search-box {
+  width: 380px;
+  max-width: 100%;
+  height: 42px;
+
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 0 14px;
+
+  color: #94a3b8;
+}
+
+.search-input {
+  border: none;
+  outline: none;
+
+  width: 100%;
+
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
+}
+
+/* =========================
+   RIGHT
+========================= */
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* =========================
+   ACTION BUTTONS
+========================= */
+
+.topbar-btn {
+  height: 40px;
+
+  padding: 0 16px;
+
+  border-radius: 10px;
+  border: 1px solid #dbe2ea;
+
+  background: white;
+  color: #111827;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  cursor: pointer;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  transition: 0.2s ease;
+}
+
+.topbar-btn:hover {
+  background: #dbf3fe;
+  color: #525aff;
+  border-color: #c7e8f7;
+}
+
+/* =========================
+   NOTIFICATION
+========================= */
+
+.notification-btn {
+  width: 40px;
+  height: 40px;
+
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+
+  background: white;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  color: #64748b;
+
+  transition: 0.2s ease;
+}
+
+.notification-btn:hover {
+  background: #f8fafc;
+}
+
+/* =========================
+   PROFILE
+========================= */
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: #525aff;
+  color: white;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.profile-role {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 1024px) {
+  .search-box {
+    width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .topbar-logo {
+    display: block;
+  }
+
+  .search-box {
+    flex: 1;
+    width: auto;
+  }
+
+  .topbar-btn span {
+    display: none;
+  }
+
+  .profile-info {
+    display: none;
+  }
+
+  .topbar {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar-btn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .search-box {
+    display: none;
+  }
+}

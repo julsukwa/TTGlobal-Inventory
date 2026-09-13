@@ -1,0 +1,110 @@
+.add-customer-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* HEADER */
+
+.page-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.page-header p {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* CARD */
+
+.form-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.form-card h3 {
+  margin-bottom: 24px;
+  font-size: 18px;
+  color: #111827;
+}
+
+/* GRID */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-group input,
+.form-group textarea {
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  padding: 12px 14px;
+
+  font-size: 14px;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #525AFF;
+}
+
+.notes-group {
+  margin-top: 20px;
+}
+
+.notes-group textarea {
+  resize: vertical;
+}
+
+/* FOOTER */
+
+.form-footer {
+  margin-top: 30px;
+
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.cancel-btn {
+  padding: 12px 20px;
+
+  border-radius: 10px;
+  border: 1px solid #dbe2ea;
+
+  background: white;
+
+  cursor: pointer;
+}
+
+.save-btn {
+  padding: 12px 20px;
+
+  border: none;
+  border-radius: 10px;
+
+  background: #2563eb;
+  color: white;
+
+  cursor: pointer;
+}

@@ -1,0 +1,358 @@
+.nso-page {
+  width: 100%;
+  max-width: 900px;
+}
+
+.nso-breadcrumb {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.nso-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  gap: 16px;
+}
+
+.nso-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #172b4d;
+}
+
+.nso-header p {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.nso-back-btn {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid #dbeafe;
+  background: white;
+  color: #2563eb;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.nso-back-btn:hover { background: #eff6ff; }
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+
+.nso-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+
+.nso-card {
+  background: white;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.nso-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: #2563eb;
+}
+
+.nso-card-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #172b4d;
+}
+
+.nso-card-icon {
+  font-size: 18px;
+}
+
+.nso-card-desc {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* ── Label / field ────────────────────────────────────────────────────────── */
+
+.nso-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.nso-required { color: #ef4444; margin-left: 2px; }
+.nso-optional { color: #94a3b8; font-weight: 400; }
+
+.nso-error-msg {
+  display: block;
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+/* ── Customer search ──────────────────────────────────────────────────────── */
+
+.nso-customer-search-wrapper {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.nso-customer-input-row {
+  position: relative;
+}
+
+.nso-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nso-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.nso-chevron {
+  position: absolute;
+  right: 12px;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.nso-search-input-wrap input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  padding: 0 36px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.nso-search-input-wrap input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.nso-input-error {
+  border-color: #ef4444 !important;
+}
+
+/* Customer dropdown */
+.nso-customer-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.nso-dropdown-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s;
+}
+
+.nso-dropdown-item:last-child { border-bottom: none; }
+.nso-dropdown-item:hover { background: #f5f9ff; }
+
+.nso-dropdown-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #172b4d;
+}
+
+.nso-dropdown-meta {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.nso-dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* Customer details panel */
+.nso-customer-details {
+  background: #f5f9ff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.nso-detail-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.nso-detail-row > div span {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 3px;
+}
+
+.nso-detail-row > div p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #172b4d;
+}
+
+/* ── Form grid ────────────────────────────────────────────────────────────── */
+
+.nso-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.nso-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.nso-field-full {
+  grid-column: 1 / -1;
+}
+
+.nso-text-input {
+  height: 42px;
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.nso-text-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.nso-input-disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.nso-textarea {
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.nso-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────────── */
+
+.nso-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.nso-cancel-btn {
+  height: 42px;
+  padding: 0 20px;
+  border: 1px solid #dce3ed;
+  background: white;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.nso-cancel-btn:hover { background: #f8fafc; }
+
+.nso-proceed-btn {
+  height: 42px;
+  padding: 0 24px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nso-proceed-btn:hover { background: #1d4ed8; }
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .nso-page { max-width: 100%; }
+
+  .nso-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .nso-header h1 { font-size: 22px; }
+
+  .nso-detail-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nso-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nso-actions {
+    flex-direction: column;
+  }
+
+  .nso-proceed-btn,
+  .nso-cancel-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
