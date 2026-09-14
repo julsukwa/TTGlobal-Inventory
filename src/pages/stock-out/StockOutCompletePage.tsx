@@ -130,6 +130,7 @@ export default function StockOutCompletePage() {
               <tr>
                 <th>#</th>
                 <th>Asset ID</th>
+                <th>List Number</th>
                 <th>Category</th>
                 <th>Brand</th>
                 <th>Model</th>
@@ -143,6 +144,7 @@ export default function StockOutCompletePage() {
                 <tr key={item.assetId}>
                   <td className="soc-row-num">{idx + 1}</td>
                   <td className="soc-asset-id">{item.assetId}</td>
+                  <td>{item.listNumber || "—"}</td>
                   <td>{item.category}</td>
                   <td>{item.brand}</td>
                   <td>{item.model}</td>

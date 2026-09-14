@@ -10,6 +10,8 @@ import {
   Calendar,
   UploadCloud,
   FileSpreadsheet,
+  FileText,
+  FileSearch,
   X,
   Download,
   Info,
@@ -19,7 +21,7 @@ import {
 import "./ImportCsvPage.css";
 import { stockInShipments } from "./mockStockIn";
 import { downloadCsvTemplate, formatFileSize, parseInventoryFile, validateCsvRows } from "./csvParser";
-import type { CsvValidationResult } from "./csvImportTypes";
+import type { CsvUploadType, CsvValidationResult } from "./csvImportTypes";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per documentation
 
@@ -29,6 +31,7 @@ const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per documentation
 interface LivePreview {
   rowCount: number;
   totalQuantity: number;
+  listNumberCount: number;
   readable: boolean;
 }
 
@@ -40,6 +43,7 @@ export default function ImportCsvPage() {
     (item) => item.shipmentId === shipmentId
   );
 
+  const [uploadType, setUploadType] = useState<CsvUploadType>("summary");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -70,10 +74,10 @@ export default function ImportCsvPage() {
   const readLivePreview = async (file: File) => {
     setIsReadingPreview(true);
     try {
-      const { rows, columnMap } = await parseInventoryFile(file);
+      const { rows, columnMap } = await parseInventoryFile(file, uploadType);
 
       if (!columnMap) {
-        setLivePreview({ rowCount: 0, totalQuantity: 0, readable: false });
+        setLivePreview({ rowCount: 0, totalQuantity: 0, listNumberCount: 0, readable: false });
         return;
       }
 
@@ -82,9 +86,13 @@ export default function ImportCsvPage() {
         return sum + (Number.isFinite(qty) && qty > 0 ? qty : 0);
       }, 0);
 
-      setLivePreview({ rowCount: rows.length, totalQuantity, readable: true });
+      const listNumberCount = new Set(
+        rows.map((row) => row.listNumber.trim()).filter((value) => value !== "")
+      ).size;
+
+      setLivePreview({ rowCount: rows.length, totalQuantity, listNumberCount, readable: true });
     } catch {
-      setLivePreview({ rowCount: 0, totalQuantity: 0, readable: false });
+      setLivePreview({ rowCount: 0, totalQuantity: 0, listNumberCount: 0, readable: false });
     } finally {
       setIsReadingPreview(false);
     }
@@ -158,6 +166,17 @@ export default function ImportCsvPage() {
     setLivePreview(null);
   };
 
+  // Switching upload type changes which columns are required, so any
+  // already-selected file needs to be re-picked and re-read against the new
+  // column set rather than silently carrying over a stale preview.
+  const handleSelectUploadType = (nextType: CsvUploadType) => {
+    if (nextType === uploadType) return;
+    setUploadType(nextType);
+    setSelectedFile(null);
+    setFileError(null);
+    setLivePreview(null);
+  };
+
   // ── Validate & proceed ───────────────────────────────────────────────────
 
   const handleValidate = async () => {
@@ -167,7 +186,7 @@ export default function ImportCsvPage() {
     setFileError(null);
 
     try {
-      const { rows, fileLevelErrors, columnMap } = await parseInventoryFile(selectedFile);
+      const { rows, fileLevelErrors, columnMap } = await parseInventoryFile(selectedFile, uploadType);
 
       if (!columnMap) {
         // Missing-column / unreadable-file errors — show inline, don't navigate
@@ -181,7 +200,8 @@ export default function ImportCsvPage() {
         remaining,
         fileLevelErrors,
         selectedFile.name,
-        formatFileSize(selectedFile.size)
+        formatFileSize(selectedFile.size),
+        uploadType
       );
 
       // Brief simulated validation delay for real-time feedback cue
@@ -286,6 +306,42 @@ export default function ImportCsvPage() {
         </div>
       </div>
 
+      {/* ── Upload type selector ─────────────────────────────────────────────── */}
+      <div className="csv-upload-type-card">
+        <h2>Upload Type</h2>
+        <div className="csv-upload-type-options">
+          <button
+            type="button"
+            className={`csv-upload-type-option ${
+              uploadType === "summary" ? "csv-upload-type-option-selected" : ""
+            }`}
+            onClick={() => handleSelectUploadType("summary")}
+          >
+            <FileText size={22} />
+            <h3>Summary Upload</h3>
+            <p>
+              Used when Asset IDs are not known. System generates IDs automatically.
+              Quantity can be greater than 1.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            className={`csv-upload-type-option ${
+              uploadType === "detailed" ? "csv-upload-type-option-selected" : ""
+            }`}
+            onClick={() => handleSelectUploadType("detailed")}
+          >
+            <FileSearch size={22} />
+            <h3>Detailed Upload</h3>
+            <p>
+              Used when Asset IDs are already known and printed on the items. Each row
+              is one individual item.
+            </p>
+          </button>
+        </div>
+      </div>
+
       {/* ── Two-column body ────────────────────────────────────────────────── */}
       <div className="csv-body">
 
@@ -350,7 +406,7 @@ export default function ImportCsvPage() {
 
           <div className="csv-template-row">
             <span>Need the correct format?</span>
-            <button className="csv-template-link" onClick={downloadCsvTemplate}>
+            <button className="csv-template-link" onClick={() => downloadCsvTemplate(uploadType)}>
               <Download size={13} />
               Download CSV Template
             </button>
@@ -362,6 +418,10 @@ export default function ImportCsvPage() {
 
           <div className="csv-summary-panel">
             <h2>Import Summary</h2>
+            <div className="summary-row">
+              <span>Upload Type</span>
+              <strong>{uploadType === "detailed" ? "Detailed" : "Summary"}</strong>
+            </div>
             <div className="summary-row">
               <span>Selected Shipment</span>
               <strong className="summary-link">{shipment.shipmentId}</strong>
@@ -400,6 +460,18 @@ export default function ImportCsvPage() {
                   ? "Reading..."
                   : livePreview?.readable
                   ? livePreview.totalQuantity
+                  : "—"}
+              </strong>
+            </div>
+            <div className="summary-row">
+              <span>List Numbers Found</span>
+              <strong>
+                {!selectedFile
+                  ? "—"
+                  : isReadingPreview
+                  ? "Reading..."
+                  : livePreview?.readable
+                  ? livePreview.listNumberCount
                   : "—"}
               </strong>
             </div>

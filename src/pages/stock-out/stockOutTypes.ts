@@ -18,6 +18,11 @@
 
 export type StockOutItemStatus = "Ok" | "Faulty";
 
+// How an item was added to the current scanning session — surfaced in the
+// session table, the review table, the completion table, and the historical
+// transaction drawer so every issued item stays traceable to its origin.
+export type ScannedItemSource = "scan" | "list-number" | "batch";
+
 export interface ScannedItem {
   assetId: string;
   category: string;
@@ -32,6 +37,8 @@ export interface ScannedItem {
   status: StockOutItemStatus; // original status before issuing
   batchId: string;
   shipmentId: string;
+  source: ScannedItemSource; // how this item was added
+  listNumber: string; // the list number this item belongs to
 }
 
 export interface StockOutTransaction {

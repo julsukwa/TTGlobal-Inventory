@@ -3,6 +3,18 @@
 // The invoice number is the unique identifier for each transaction.
 // No system-generated transaction ID is used.
 //
+// listNumber/batchId groupings below are deliberately chosen to exercise
+// every bulk-add code path on ScanItemsPage:
+//   LIST-A     — CNT1 only (3 items, includes 1 Faulty) — single-shipment add
+//                with the faulty warning modal.
+//   LIST-B     — spans CNT1 (2 items) AND CNT2 (2 items, 1 Faulty) — triggers
+//                the multi-shipment disambiguation modal; the CNT2 branch
+//                also triggers the faulty warning after selection.
+//   BATCH-001  — ASH1 only (2 items, both Ok) — single-shipment add with no
+//                faulty warning.
+//   CNT1-TTL-26-0001/0002/0003, CNT2-TTL-26-0001, ASH1-MWS-26-0001 — distinct
+//                Batch IDs for exercising Method 3 (bulk by Batch ID).
+//
 // BACKEND INTEGRATION SEAM:
 //   Replace with GET /stock-out — list of all completed transactions.
 //   The inventory lookup (asset scan validation) will come from
@@ -25,8 +37,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.4GHz",
     screenType: "Non-Touch",
     status: "Ok",
-    batchId: "BCH-8F3A91C2",
+    batchId: "CNT1-TTL-26-0001",
     shipmentId: "CNT1",
+    listNumber: "LIST-A",
+    source: "scan",
   },
   {
     assetId: "CNT1-TTL-26-0002",
@@ -40,8 +54,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.4GHz",
     screenType: "Non-Touch",
     status: "Ok",
-    batchId: "BCH-8F3A91C2",
+    batchId: "CNT1-TTL-26-0001",
     shipmentId: "CNT1",
+    listNumber: "LIST-A",
+    source: "scan",
   },
   {
     assetId: "CNT1-TTL-26-0003",
@@ -55,8 +71,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.6GHz",
     screenType: "Touch Screen",
     status: "Faulty",
-    batchId: "BCH-8F3A91C2",
+    batchId: "CNT1-TTL-26-0002",
     shipmentId: "CNT1",
+    listNumber: "LIST-A",
+    source: "scan",
   },
   {
     assetId: "CNT1-TTL-26-0004",
@@ -70,8 +88,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.3GHz",
     screenType: "",
     status: "Ok",
-    batchId: "BCH-A72D1E4F",
+    batchId: "CNT1-TTL-26-0003",
     shipmentId: "CNT1",
+    listNumber: "LIST-B",
+    source: "scan",
   },
   {
     assetId: "CNT1-TTL-26-0005",
@@ -85,8 +105,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.3GHz",
     screenType: "",
     status: "Ok",
-    batchId: "BCH-A72D1E4F",
+    batchId: "CNT1-TTL-26-0003",
     shipmentId: "CNT1",
+    listNumber: "LIST-B",
+    source: "scan",
   },
   {
     assetId: "CNT2-TTL-26-0001",
@@ -100,8 +122,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.3GHz",
     screenType: "Non-Touch",
     status: "Ok",
-    batchId: "BCH-1A9F33B7",
+    batchId: "CNT2-TTL-26-0001",
     shipmentId: "CNT2",
+    listNumber: "LIST-B",
+    source: "scan",
   },
   {
     assetId: "CNT2-TTL-26-0002",
@@ -115,8 +139,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.3GHz",
     screenType: "Non-Touch",
     status: "Faulty",
-    batchId: "BCH-1A9F33B7",
+    batchId: "CNT2-TTL-26-0001",
     shipmentId: "CNT2",
+    listNumber: "LIST-B",
+    source: "scan",
   },
   {
     assetId: "ASH1-MWS-26-0001",
@@ -130,8 +156,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.1GHz",
     screenType: "Touch Screen",
     status: "Ok",
-    batchId: "BCH-5E4F3A2B",
+    batchId: "ASH1-MWS-26-0001",
     shipmentId: "ASH1",
+    listNumber: "BATCH-001",
+    source: "scan",
   },
   {
     assetId: "ASH1-MWS-26-0002",
@@ -145,8 +173,10 @@ export const mockInventoryPool: ScannedItem[] = [
     speed: "2.1GHz",
     screenType: "Touch Screen",
     status: "Ok",
-    batchId: "BCH-5E4F3A2B",
+    batchId: "ASH1-MWS-26-0001",
     shipmentId: "ASH1",
+    listNumber: "BATCH-001",
+    source: "scan",
   },
 ];
 
@@ -176,8 +206,10 @@ export const mockStockOutTransactions: StockOutTransaction[] = [
         speed: "2.8GHz",
         screenType: "Non-Touch",
         status: "Ok",
-        batchId: "BCH-C3D2E1F0",
+        batchId: "CNT3-MWS-26-0001",
         shipmentId: "CNT3",
+        listNumber: "LIST-C",
+        source: "scan",
       },
       {
         assetId: "CNT3-MWS-26-0002",
@@ -191,8 +223,10 @@ export const mockStockOutTransactions: StockOutTransaction[] = [
         speed: "3.0GHz",
         screenType: "",
         status: "Ok",
-        batchId: "BCH-C3D2E1F0",
+        batchId: "CNT3-MWS-26-0001",
         shipmentId: "CNT3",
+        listNumber: "LIST-C",
+        source: "scan",
       },
     ],
   },
@@ -220,8 +254,10 @@ export const mockStockOutTransactions: StockOutTransaction[] = [
         speed: "",
         screenType: "",
         status: "Faulty",
-        batchId: "BCH-C3D2E1F0",
+        batchId: "CNT3-MWS-26-0002",
         shipmentId: "CNT3",
+        listNumber: "OFFICE-ITEMS",
+        source: "list-number",
       },
     ],
   },

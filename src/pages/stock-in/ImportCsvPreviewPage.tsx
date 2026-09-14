@@ -3,6 +3,8 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   FileSpreadsheet,
+  FileText,
+  FileSearch,
   Layers,
   CheckCircle2,
   XCircle,
@@ -81,6 +83,7 @@ export default function ImportCsvPreviewPage() {
     );
   }
 
+  const isDetailedUpload = result.uploadType === "detailed";
   const hasFileLevelErrors = result.fileLevelErrors.length > 0;
   const hasRowErrors = result.invalidRows.length > 0;
   const allRowsValid = !hasRowErrors && result.rows.length > 0;
@@ -136,6 +139,19 @@ export default function ImportCsvPreviewPage() {
             <span>CSV File</span>
             <h3 className="csvprev-filename" title={result.fileName}>{result.fileName}</h3>
             <p>{result.fileSizeLabel}</p>
+          </div>
+        </div>
+
+        <div className="csvprev-summary-item">
+          <div className="cp-icon cp-icon-purple">
+            {isDetailedUpload ? <FileSearch size={16} /> : <FileText size={16} />}
+          </div>
+          <div>
+            <span>Upload Type</span>
+            <h3 className={`upload-type-pill ${result.uploadType === "detailed" ? "detailed" : "summary"}`}>
+              {isDetailedUpload ? "Detailed" : "Summary"}
+            </h3>
+            <p>{isDetailedUpload ? "Asset IDs provided" : "Asset IDs auto-generated"}</p>
           </div>
         </div>
 
@@ -265,6 +281,8 @@ export default function ImportCsvPreviewPage() {
             <thead>
               <tr>
                 <th>#</th>
+                <th>List Number</th>
+                {isDetailedUpload && <th>Asset ID</th>}
                 <th>Category</th>
                 <th>Condition</th>
                 <th>Brand</th>
@@ -282,7 +300,7 @@ export default function ImportCsvPreviewPage() {
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="csvprev-empty-row">
+                  <td colSpan={isDetailedUpload ? 15 : 14} className="csvprev-empty-row">
                     No rows match your search/filter.
                   </td>
                 </tr>
@@ -293,6 +311,10 @@ export default function ImportCsvPreviewPage() {
                     className={row.status === "Invalid" ? "row-invalid" : ""}
                   >
                     <td className="row-index">{row.rowNumber}</td>
+                    <td className="specs-cell">{row.listNumber || "—"}</td>
+                    {isDetailedUpload && (
+                      <td className="preview-asset-id">{row.assetId || "—"}</td>
+                    )}
                     <td>
                       <span className="category-badge">{row.category || "—"}</span>
                     </td>

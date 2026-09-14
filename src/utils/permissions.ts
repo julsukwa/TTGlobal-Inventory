@@ -22,7 +22,7 @@ export const PERMISSIONS: Record<string, RoutePermission> = {
   stockOut:       { canView: ['admin','sales'],                        canEdit: ['admin','sales'] },
   adjustments:    { canView: ['admin','warehouse'],                    canEdit: ['admin','warehouse'] },
   database:       { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin'] },
-  faultyStock:    { canView: ['admin','warehouse','warranty'],         canEdit: ['admin'] },
+  faultyStock:    { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin','warehouse'] },
   warranty:       { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin','warranty'] },
 };
 

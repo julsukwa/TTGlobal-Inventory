@@ -12,6 +12,7 @@ import {
   ListFilter,
   ArrowDownToLine,
   ArrowUpFromLine,
+  AlertTriangle,
   LogOut,
 } from "lucide-react";
 
@@ -32,7 +33,7 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const showSystemSection =
     canSee("adjustments") || canSee("database") || canSee("dropdowns");
-  const showStockSection = canSee("stockIn") || canSee("stockOut");
+  const showStockSection = canSee("stockIn") || canSee("stockOut") || canSee("faultyStock");
 
   return (
     <aside className={`sidebar${isOpen ? " sidebar--open" : ""}`}>
@@ -182,6 +183,19 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <ArrowUpFromLine size={16} />
                 <span>Stock Out</span>
+              </NavLink>
+            )}
+
+            {canSee("faultyStock") && (
+              <NavLink
+                to="/faulty-stock"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
+                <AlertTriangle size={16} />
+                <span>Faulty Stock</span>
               </NavLink>
             )}
           </>

@@ -103,13 +103,14 @@
   flex-shrink: 0;
 }
 
-/* ── Body layout ──────────────────────────────────────────────────────────── */
+/* ── Body layout (v2 — two-column methods grid, session table full width) ──── */
 
-.scan-body {
+.scan-methods-grid {
   display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  align-items: start;
 }
 
 /* ── Scanner input card ───────────────────────────────────────────────────── */
@@ -120,6 +121,182 @@
   border-radius: var(--radius-2xl);
   padding: 22px;
   align-self: start;
+}
+
+/* ── Method section headings (v2 — Method 1 / Bulk Add) ───────────────────── */
+
+.scan-method-heading {
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--color-navy);
+  margin: 0 0 var(--space-1);
+}
+
+/* ── Bulk Add card (v2 — unified List Number / Batch ID lookup) ──────────────── */
+/* Matches .scan-input-card's box treatment so both method cards read as one
+   consistent pair sitting side by side. */
+
+.scan-bulk-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
+  padding: 22px;
+  align-self: start;
+}
+
+.bulk-type-select {
+  height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-md);
+  background: var(--color-white);
+  color: var(--color-text-body);
+  outline: none;
+  cursor: pointer;
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+.bulk-type-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.bulk-unified-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.scan-bulk-input {
+  flex: 1;
+  height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-md);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.scan-bulk-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+/* Skipped-count info feedback — shares the base .scan-feedback box (padding,
+   radius, flex) with .scan-feedback-error/-success, adding its own colour
+   and the space-between layout needed for the dismiss button. */
+.scan-feedback-info {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  justify-content: space-between;
+}
+
+.scan-dismiss-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-faint);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.scan-dismiss-btn:hover {
+  color: var(--color-text-body);
+}
+
+/* ── Shipment disambiguation modal (Method 2) ─────────────────────────────── */
+
+.scan-shipment-options {
+  margin-top: var(--space-4);
+}
+
+.scan-shipment-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-2);
+  background: var(--color-white);
+}
+
+.scan-shipment-option > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scan-shipment-option strong {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.scan-shipment-option span,
+.scan-shipment-option p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* Scoped override of the shared Button component (primary variant) so the
+   per-row "Select" action reads as a compact outlined button rather than the
+   full-size filled button used elsewhere in the app. */
+.scan-shipment-option .ui-btn {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-primary);
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.scan-shipment-option .ui-btn:hover {
+  background: var(--color-surface);
+}
+
+/* ── Source pill (session table) ──────────────────────────────────────────── */
+
+.scan-source-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Per-source colour variants — not currently applied by ScanItemsPage.tsx,
+   which renders every pill with the single .scan-source-pill class above
+   regardless of source. Defined here so a follow-up className tweak
+   (e.g. `scan-source-pill source-${item.source}`) lights these up for free. */
+.source-pill.source-scan {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.source-pill.source-list {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.source-pill.source-batch {
+  background: var(--color-issued-bg);
+  color: var(--color-issued-text);
 }
 
 .scan-input-header {
@@ -247,6 +424,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  margin-bottom: var(--space-5);
 }
 
 .scan-session-header {
@@ -411,8 +589,8 @@
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
-@media (max-width: 900px) {
-  .scan-body {
+@media (max-width: 768px) {
+  .scan-methods-grid {
     grid-template-columns: 1fr;
   }
 }

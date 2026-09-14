@@ -43,6 +43,12 @@ export default function ReviewStockOutPage() {
   const okCount = state.items.filter((i) => i.status === "Ok").length;
   const faultyCount = state.items.filter((i) => i.status === "Faulty").length;
 
+  const sourceLabel = (item: ScannedItem) => {
+    if (item.source === "list-number") return `List: ${item.listNumber}`;
+    if (item.source === "batch") return `Batch: ${item.batchId}`;
+    return "Scan";
+  };
+
   const handleConfirm = () => {
     // BACKEND INTEGRATION SEAM:
     // POST /stock-out → { customerId, invoiceNumber, notes, assetIds }
@@ -162,12 +168,14 @@ export default function ReviewStockOutPage() {
               <tr>
                 <th>#</th>
                 <th>Asset ID</th>
+                <th>List Number</th>
                 <th>Category</th>
                 <th>Brand</th>
                 <th>Model</th>
                 <th>Specifications</th>
                 <th>Comment</th>
                 <th>Status</th>
+                <th>Source</th>
               </tr>
             </thead>
             <tbody>
@@ -175,6 +183,7 @@ export default function ReviewStockOutPage() {
                 <tr key={item.assetId}>
                   <td className="rev-row-num">{idx + 1}</td>
                   <td className="rev-asset-id">{item.assetId}</td>
+                  <td>{item.listNumber || "—"}</td>
                   <td>{item.category}</td>
                   <td>{item.brand}</td>
                   <td>{item.model}</td>
@@ -190,6 +199,9 @@ export default function ReviewStockOutPage() {
                     >
                       {item.status}
                     </span>
+                  </td>
+                  <td>
+                    <span className="rev-source-pill">{sourceLabel(item)}</span>
                   </td>
                 </tr>
               ))}

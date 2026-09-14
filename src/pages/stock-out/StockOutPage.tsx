@@ -264,6 +264,9 @@ export default function StockOutPage() {
                         <span className="so-drawer-specs">
                           {buildSpecsString(item)}
                         </span>
+                        <span className="so-drawer-traceability">
+                          List: {item.listNumber || "—"} · Batch: {item.batchId || "—"}
+                        </span>
                       </div>
                       <div className="so-drawer-item-right">
                         <span

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,7 +16,7 @@ import {
 
 import "./ManualStockInPage.css";
 import { stockInShipments } from "./mockStockIn";
-import type { SessionInventoryItem } from "./manualStockInTypes";
+import type { ListNumberGroup, SessionInventoryItem } from "./manualStockInTypes";
 
 // ─── Fixed dropdown option sets ────────────────────────────────────────────────
 // NOTE FOR BACKEND INTEGRATION: these option sets (category, condition, comment)
@@ -35,6 +35,9 @@ const isLCDCategory = (category: string) => category === "LCD";
 // ─── Blank form state ──────────────────────────────────────────────────────────
 
 const blankForm = {
+  listNumber: "",
+  assetIdSource: "generated" as "generated" | "provided",
+  providedAssetId: "",
   category: "",
   condition: "",
   brand: "",
@@ -59,6 +62,9 @@ function validateForm(
   editingId: number | null,
   sessionItems: SessionInventoryItem[]
 ): string | null {
+  if (!form.listNumber.trim()) return "List Number is required.";
+  if (form.assetIdSource === "provided" && !form.providedAssetId.trim())
+    return "Asset ID is required when Provided is selected.";
   if (!form.category) return "Please select a category.";
   if (!form.condition) return "Please select a condition.";
   if (!form.brand.trim()) return "Brand is required.";
@@ -108,6 +114,33 @@ export default function ManualStockInPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Groups session items by List Number, preserving each group's first-seen
+  // order, so the session table can render a section header per group even
+  // when items for different list numbers were added in an interleaved order.
+  // Declared before the "shipment not found" early return below since hooks
+  // must run unconditionally on every render.
+  const listNumberGroups: ListNumberGroup[] = useMemo(() => {
+    const order: string[] = [];
+    const grouped = new Map<string, SessionInventoryItem[]>();
+
+    sessionItems.forEach((item) => {
+      if (!grouped.has(item.listNumber)) {
+        grouped.set(item.listNumber, []);
+        order.push(item.listNumber);
+      }
+      grouped.get(item.listNumber)!.push(item);
+    });
+
+    return order.map((listNumber) => {
+      const items = grouped.get(listNumber)!;
+      return {
+        listNumber,
+        items,
+        totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+      };
+    });
+  }, [sessionItems]);
+
   if (!shipment) {
     return (
       <div className="manual-page">
@@ -124,6 +157,15 @@ export default function ManualStockInPage() {
   );
   const remaining = shipment.itemsSent - shipment.itemsReceived - sessionTotal;
   const isLCD = isLCDCategory(form.category);
+
+  // Reusing a List Number that already has items in this session is allowed
+  // by design (it appends to that group) — this is just an informational
+  // heads-up, not a validation error.
+  const existingGroupForListNumber = form.listNumber.trim()
+    ? listNumberGroups.find(
+        (group) => group.listNumber.toLowerCase() === form.listNumber.trim().toLowerCase()
+      )
+    : undefined;
 
   // ─── Form helpers ────────────────────────────────────────────────────────────
 
@@ -146,8 +188,22 @@ export default function ManualStockInPage() {
     setError(null);
   };
 
+  const handleAssetIdSourceChange = (source: "generated" | "provided") => {
+    setForm((prev) => ({
+      ...prev,
+      assetIdSource: source,
+      // Wipe the provided ID when switching back to generated so no stale
+      // value is silently carried into the session item.
+      providedAssetId: source === "generated" ? "" : prev.providedAssetId,
+    }));
+    setError(null);
+  };
+
+  // The List Number field is intentionally exempt from the reset below — it
+  // persists across "Add to Session" clicks so the operator can add several
+  // items under the same group without retyping it every time.
   const resetForm = () => {
-    setForm(blankForm);
+    setForm((prev) => ({ ...blankForm, listNumber: prev.listNumber }));
     setEditingId(null);
     setError(null);
   };
@@ -168,6 +224,9 @@ export default function ManualStockInPage() {
 
     const newItem: SessionInventoryItem = {
       id: editingId ?? Date.now(),
+      listNumber: form.listNumber.trim(),
+      assetIdSource: form.assetIdSource,
+      providedAssetId: form.assetIdSource === "provided" ? form.providedAssetId.trim() : "",
       category: form.category,
       condition: form.condition,
       brand: form.brand.trim(),
@@ -197,6 +256,9 @@ export default function ManualStockInPage() {
 
   const handleEdit = (item: SessionInventoryItem) => {
     setForm({
+      listNumber: item.listNumber,
+      assetIdSource: item.assetIdSource,
+      providedAssetId: item.providedAssetId,
       category: item.category,
       condition: item.condition,
       brand: item.brand,
@@ -247,6 +309,31 @@ export default function ManualStockInPage() {
       state: { sessionItems },
     });
   };
+
+  // ─── Confirm-modal Asset ID summary text ───────────────────────────────────
+  // Describes what will happen to Asset IDs on confirm, accounting for a
+  // session that mixes system-generated and operator-provided IDs.
+
+  const generatedUnitCount = sessionItems
+    .filter((item) => item.assetIdSource === "generated")
+    .reduce((sum, item) => sum + item.quantity, 0);
+  const providedUnitCount = sessionItems
+    .filter((item) => item.assetIdSource === "provided")
+    .reduce((sum, item) => sum + item.quantity, 0);
+
+  const assetIdSummaryText = (() => {
+    if (generatedUnitCount > 0 && providedUnitCount > 0) {
+      return `Asset IDs will be generated automatically for ${generatedUnitCount} unit${
+        generatedUnitCount !== 1 ? "s" : ""
+      }, and ${providedUnitCount} unit${
+        providedUnitCount !== 1 ? "s" : ""
+      } will keep the Asset ID provided. A Batch ID will also be generated automatically.`;
+    }
+    if (providedUnitCount > 0) {
+      return "Provided Asset IDs will be used exactly as entered. A Batch ID will be generated automatically.";
+    }
+    return "Asset IDs will be generated automatically. A Batch ID will also be generated automatically.";
+  })();
 
   // ─── Reconciliation ──────────────────────────────────────────────────────────
 
@@ -415,6 +502,76 @@ export default function ManualStockInPage() {
         </div>
 
         {error && <div className="form-error">{error}</div>}
+
+        {/* ── List Number declaration ────────────────────────────────────── */}
+        <div className="manual-form-top">
+          <div className="form-field">
+            <label>
+              List Number <span className="required">*</span>
+            </label>
+            <input
+              name="listNumber"
+              value={form.listNumber}
+              onChange={handleChange}
+              placeholder="e.g. LIST-A, BATCH-001, OFFICE-ITEMS"
+            />
+            {existingGroupForListNumber && (
+              <p className="list-number-warning">
+                &ldquo;{form.listNumber.trim()}&rdquo; already has{" "}
+                {existingGroupForListNumber.items.length} item
+                {existingGroupForListNumber.items.length !== 1 ? "s" : ""} (
+                {existingGroupForListNumber.totalQuantity} unit
+                {existingGroupForListNumber.totalQuantity !== 1 ? "s" : ""}) in this session. New
+                items will be added to that group.
+              </p>
+            )}
+          </div>
+
+          {/* ── Asset ID toggle ─────────────────────────────────────────── */}
+          <div className="form-field">
+            <label>Asset ID</label>
+            <div className="asset-id-toggle">
+              <label className="asset-id-toggle-option">
+                <input
+                  type="radio"
+                  name="assetIdSource"
+                  checked={form.assetIdSource === "generated"}
+                  onChange={() => handleAssetIdSourceChange("generated")}
+                />
+                System Generated (default)
+              </label>
+              <label className="asset-id-toggle-option">
+                <input
+                  type="radio"
+                  name="assetIdSource"
+                  checked={form.assetIdSource === "provided"}
+                  onChange={() => handleAssetIdSourceChange("provided")}
+                />
+                Provided
+              </label>
+            </div>
+          </div>
+
+          {form.assetIdSource === "provided" && (
+            <div className="form-field">
+              <label>
+                Asset ID <span className="required">*</span>
+              </label>
+              <input
+                name="providedAssetId"
+                value={form.providedAssetId}
+                onChange={handleChange}
+                placeholder="e.g. 006704358"
+              />
+              {Number(form.quantity) > 1 && (
+                <p className="list-number-warning">
+                  Note: when providing an Asset ID, quantity should typically be 1 since each
+                  item has a unique ID.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="manual-form-grid">
 
@@ -642,6 +799,8 @@ export default function ManualStockInPage() {
           <thead>
             <tr>
               <th>#</th>
+              <th>List Number</th>
+              <th>Asset ID</th>
               <th>Category</th>
               <th>Condition</th>
               <th>Brand</th>
@@ -660,67 +819,94 @@ export default function ManualStockInPage() {
           <tbody>
             {sessionItems.length === 0 ? (
               <tr>
-                <td colSpan={14} className="session-empty">
+                <td colSpan={16} className="session-empty">
                   Items added above will appear here before you confirm.
                 </td>
               </tr>
             ) : (
-              sessionItems.map((item, index) => (
-                <tr
-                  key={item.id}
-                  className={editingId === item.id ? "row-editing" : ""}
-                >
-                  <td className="row-index">{index + 1}</td>
-                  <td>
-                    <span className="category-badge">{item.category}</span>
-                  </td>
-                  <td>
-                    <span className={`condition-badge condition-${item.condition.toLowerCase()}`}>
-                      {item.condition}
-                    </span>
-                  </td>
-                  <td>{item.brand}</td>
-                  <td>{item.model}</td>
-                  <td>{item.processor || "—"}</td>
-                  <td>{item.generation || "—"}</td>
-                  <td>{item.ram || "—"}</td>
-                  <td>{item.storage || "—"}</td>
-                  <td>{item.speed || "—"}</td>
-                  <td>
-                    {item.screenType ? (
-                      <span
-                        className={`comment-badge ${
-                          item.screenType === "Touch Screen" ? "comment-touch" : "comment-nontouch"
-                        }`}
-                      >
-                        {item.screenType}
-                      </span>
-                    ) : (
-                      <span className="comment-none">—</span>
-                    )}
-                  </td>
-                  <td className="specs-cell">{item.additionalInfo || "—"}</td>
-                  <td className="qty-cell">{item.quantity}</td>
-                  <td>
-                    <div className="session-actions">
-                      <button
-                        className="session-action-btn edit-action"
-                        onClick={() => handleEdit(item)}
-                        title="Edit"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        className="session-action-btn delete-action"
-                        onClick={() => handleDeleteRequest(item.id)}
-                        title="Remove"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              (() => {
+                let runningIndex = 0;
+                return listNumberGroups.map((group) => (
+                  <Fragment key={group.listNumber}>
+                    <tr className="session-group-header-row">
+                      <td colSpan={16} className="session-group-header">
+                        <strong>{group.listNumber}</strong> — {group.items.length} item
+                        {group.items.length !== 1 ? "s" : ""}, {group.totalQuantity} unit
+                        {group.totalQuantity !== 1 ? "s" : ""} total
+                      </td>
+                    </tr>
+                    {group.items.map((item) => {
+                      runningIndex += 1;
+                      return (
+                        <tr
+                          key={item.id}
+                          className={editingId === item.id ? "row-editing" : ""}
+                        >
+                          <td className="row-index">{runningIndex}</td>
+                          <td>
+                            <span className="list-number-badge">{item.listNumber}</span>
+                          </td>
+                          <td>
+                            {item.assetIdSource === "generated" ? (
+                              <span className="asset-id-generated">Generated</span>
+                            ) : (
+                              <span className="asset-id-provided">{item.providedAssetId}</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="category-badge">{item.category}</span>
+                          </td>
+                          <td>
+                            <span className={`condition-badge condition-${item.condition.toLowerCase()}`}>
+                              {item.condition}
+                            </span>
+                          </td>
+                          <td>{item.brand}</td>
+                          <td>{item.model}</td>
+                          <td>{item.processor || "—"}</td>
+                          <td>{item.generation || "—"}</td>
+                          <td>{item.ram || "—"}</td>
+                          <td>{item.storage || "—"}</td>
+                          <td>{item.speed || "—"}</td>
+                          <td>
+                            {item.screenType ? (
+                              <span
+                                className={`comment-badge ${
+                                  item.screenType === "Touch Screen" ? "comment-touch" : "comment-nontouch"
+                                }`}
+                              >
+                                {item.screenType}
+                              </span>
+                            ) : (
+                              <span className="comment-none">—</span>
+                            )}
+                          </td>
+                          <td className="specs-cell">{item.additionalInfo || "—"}</td>
+                          <td className="qty-cell">{item.quantity}</td>
+                          <td>
+                            <div className="session-actions">
+                              <button
+                                className="session-action-btn edit-action"
+                                onClick={() => handleEdit(item)}
+                                title="Edit"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                className="session-action-btn delete-action"
+                                onClick={() => handleDeleteRequest(item.id)}
+                                title="Remove"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ));
+              })()
             )}
           </tbody>
         </table>
@@ -767,11 +953,15 @@ export default function ManualStockInPage() {
                 {sessionItems.length} item group
                 {sessionItems.length !== 1 ? "s" : ""}
               </strong>{" "}
+              spanning{" "}
+              <strong>
+                {listNumberGroups.length} list number
+                {listNumberGroups.length !== 1 ? "s" : ""}
+              </strong>{" "}
               for shipment <strong>{shipment.shipmentId}</strong>.
             </p>
             <p className="modal-sub">
-              Asset IDs and a Batch ID will be generated automatically. This
-              action cannot be undone.
+              {assetIdSummaryText} This action cannot be undone.
             </p>
             <div className="modal-actions">
               <button

@@ -88,7 +88,9 @@
   border-radius: var(--radius-xl);
   padding: 18px 14px;
   display: grid;
-  grid-template-columns: 2.4fr 1fr 1fr 1fr 1fr 1.3fr;
+  /* 7 tracks — CSV File, Upload Type (v2), CSV Rows, Total Quantity,
+     Valid Rows, Invalid Rows, Remaining Capacity. */
+  grid-template-columns: 1.9fr 1fr 0.9fr 1fr 0.9fr 0.9fr 1.2fr;
   margin-bottom: 18px;
 }
 
@@ -169,6 +171,24 @@
 
 .text-green { color: #16a34a !important; }
 .text-red { color: var(--color-danger-dark) !important; }
+
+.upload-type-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.upload-type-pill.summary {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.upload-type-pill.detailed {
+  background: var(--color-issued-bg);
+  color: var(--color-issued-text);
+}
 
 /* BANNERS */
 
@@ -351,6 +371,13 @@
 .specs-cell {
   color: var(--color-text-muted);
   font-size: 12px;
+}
+
+.preview-asset-id {
+  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .comment-badge {
@@ -577,7 +604,10 @@
 
 @media (max-width: 768px) {
   .csvprev-summary-card { grid-template-columns: 1fr 1fr; row-gap: 18px; }
-  .csvprev-summary-item:nth-child(3n) { border-right: 1px solid var(--color-border-light); }
+  /* Right-column items shouldn't carry the divider border through to the
+     card's outer edge — left-column items keep it via the base
+     :not(:last-child) rule. Count-agnostic, so it holds for any number of
+     summary items (6 pre-v2, 7 with Upload Type added). */
   .csvprev-summary-item:nth-child(2n) { border-right: none; }
   .csvprev-header { flex-direction: column; gap: 12px; align-items: flex-start; }
   .csvprev-footer { flex-direction: column; align-items: stretch; }

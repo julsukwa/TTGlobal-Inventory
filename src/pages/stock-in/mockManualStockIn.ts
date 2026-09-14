@@ -5,6 +5,9 @@ import type {
 export const mockSessionItems: SessionInventoryItem[] = [
   {
     id: 1,
+    listNumber: "LIST-A",
+    assetIdSource: "generated",
+    providedAssetId: "",
     category: "Laptop",
     condition: "New",
     brand: "HP",
@@ -21,6 +24,9 @@ export const mockSessionItems: SessionInventoryItem[] = [
 
   {
     id: 2,
+    listNumber: "LIST-A",
+    assetIdSource: "generated",
+    providedAssetId: "",
     category: "Laptop",
     condition: "Refurb",
     brand: "Dell",
@@ -37,6 +43,9 @@ export const mockSessionItems: SessionInventoryItem[] = [
 
   {
     id: 3,
+    listNumber: "LIST-B",
+    assetIdSource: "generated",
+    providedAssetId: "",
     category: "Desktop",
     condition: "Used",
     brand: "HP",

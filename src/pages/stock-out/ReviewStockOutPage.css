@@ -205,6 +205,16 @@
 .rev-status-ok     { background: var(--color-success-bg); color: var(--color-success-text); }
 .rev-status-faulty { background: var(--color-danger-bg); color: var(--color-danger-text); }
 
+.rev-source-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
 /* ── Warning ──────────────────────────────────────────────────────────────── */
 
 .rev-warning {

@@ -3,6 +3,8 @@
 import * as XLSX from "xlsx";
 import {
   CSV_REQUIRED_COLUMNS,
+  type CsvColumn,
+  type CsvUploadType,
   type RawCsvRow,
   type ValidatedCsvRow,
   type CsvValidationResult,
@@ -36,10 +38,21 @@ function normaliseHeader(header: string): string {
   return header.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-const HEADER_LOOKUP: Record<string, string> = {};
-CSV_REQUIRED_COLUMNS.forEach((col) => {
-  HEADER_LOOKUP[normaliseHeader(col)] = col;
-});
+function buildHeaderLookup(columns: readonly string[]): Record<string, string> {
+  const lookup: Record<string, string> = {};
+  columns.forEach((col) => {
+    lookup[normaliseHeader(col)] = col;
+  });
+  return lookup;
+}
+
+// One lookup per upload type — the two column sets differ (Asset ID is only
+// required for detailed uploads), so header matching has to be aware of
+// which flow the file is being imported through.
+const HEADER_LOOKUPS: Record<CsvUploadType, Record<string, string>> = {
+  summary: buildHeaderLookup(CSV_REQUIRED_COLUMNS("summary")),
+  detailed: buildHeaderLookup(CSV_REQUIRED_COLUMNS("detailed")),
+};
 
 // ── CSV line splitting (handles simple quoted commas) ───────────────────────
 
@@ -84,23 +97,24 @@ export interface ParsedCsv {
  * column-matching rules applies regardless of source format. */
 function buildRowsFromCells(
   headerCells: string[],
-  dataRows: string[][]
+  dataRows: string[][],
+  uploadType: CsvUploadType
 ): ParsedCsv {
   const fileLevelErrors: string[] = [];
   const columnMap: Record<string, number> = {};
+  const headerLookup = HEADER_LOOKUPS[uploadType];
 
   headerCells.forEach((cell, index) => {
     const normalised = normaliseHeader(cell);
-    const matched = HEADER_LOOKUP[normalised];
+    const matched = headerLookup[normalised];
     if (matched) {
       columnMap[matched] = index;
     }
   });
 
-  // Required column validation — every column in CSV_REQUIRED_COLUMNS must be present
-  const missingColumns = CSV_REQUIRED_COLUMNS.filter(
-    (col) => !(col in columnMap)
-  );
+  // Required column validation — every column for this upload type must be present
+  const requiredColumns = CSV_REQUIRED_COLUMNS(uploadType);
+  const missingColumns = requiredColumns.filter((col) => !(col in columnMap));
 
   if (missingColumns.length > 0) {
     fileLevelErrors.push(
@@ -117,8 +131,7 @@ function buildRowsFromCells(
   }
 
   const rows: RawCsvRow[] = dataRows.map((cells, idx) => {
-    const getCell = (col: (typeof CSV_REQUIRED_COLUMNS)[number]) =>
-      (cells[columnMap[col]] ?? "").trim();
+    const getCell = (col: CsvColumn) => (cells[columnMap[col]] ?? "").trim();
 
     return {
       // +2 because idx is 0-based over data rows only, and the header row
@@ -128,6 +141,9 @@ function buildRowsFromCells(
       // treating the first data row as "row 1" and shifting every reported
       // row number down by one relative to the real file.
       rowNumber: idx + 2,
+      listNumber: getCell("List Number"),
+      assetId: uploadType === "detailed" ? getCell("Asset ID") : "",
+      uploadType,
       category: getCell("Category"),
       condition: getCell("Condition"),
       brand: getCell("Brand"),
@@ -145,7 +161,7 @@ function buildRowsFromCells(
   return { rows, fileLevelErrors, columnMap };
 }
 
-export function parseCsvText(text: string): ParsedCsv {
+export function parseCsvText(text: string, uploadType: CsvUploadType): ParsedCsv {
   // Normalise line endings, strip BOM, drop fully empty lines
   const lines = text
     .replace(/^\uFEFF/, "")
@@ -163,13 +179,13 @@ export function parseCsvText(text: string): ParsedCsv {
   const headerCells = splitCsvLine(lines[0]);
   const dataRows = lines.slice(1).map((line) => splitCsvLine(line));
 
-  return buildRowsFromCells(headerCells, dataRows);
+  return buildRowsFromCells(headerCells, dataRows, uploadType);
 }
 
 /** Parses an uploaded .xlsx/.xls file's first sheet into the same shape as
  * parseCsvText. All cell values are coerced to strings so downstream
  * validation (which expects strings) behaves identically for both formats. */
-export async function parseXlsxFile(file: File): Promise<ParsedCsv> {
+export async function parseXlsxFile(file: File, uploadType: CsvUploadType): Promise<ParsedCsv> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
 
@@ -209,17 +225,20 @@ export async function parseXlsxFile(file: File): Promise<ParsedCsv> {
     .slice(1)
     .map((row) => row.map((cell) => String(cell).trim()));
 
-  return buildRowsFromCells(headerCells, dataRows);
+  return buildRowsFromCells(headerCells, dataRows, uploadType);
 }
 
 /** Reads either a CSV or Excel file and returns the parsed result, dispatching
  * on file extension. Use this instead of calling parseCsvText/parseXlsxFile
  * directly when the source format isn't already known. */
-export async function parseInventoryFile(file: File): Promise<ParsedCsv> {
+export async function parseInventoryFile(
+  file: File,
+  uploadType: CsvUploadType
+): Promise<ParsedCsv> {
   const isExcel = /\.(xlsx|xls)$/i.test(file.name);
 
   if (isExcel) {
-    return parseXlsxFile(file);
+    return parseXlsxFile(file, uploadType);
   }
 
   const text = await file.text();
@@ -230,15 +249,28 @@ export async function parseInventoryFile(file: File): Promise<ParsedCsv> {
       columnMap: null,
     };
   }
-  return parseCsvText(text);
+  return parseCsvText(text, uploadType);
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
 function buildRowConfigKey(row: RawCsvRow): string {
-  // Used for duplicate-row detection — a "duplicate" is the same configuration
-  // appearing more than once in the file (category/condition/brand/model/specs/comment).
+  // Detailed uploads represent individual physical items — many rows sharing
+  // identical specs is completely normal there (e.g. ten identical laptops,
+  // each with its own Asset ID), so "duplicate" for that upload type means a
+  // repeated Asset ID, not a repeated configuration. Summary uploads keep the
+  // original spec-based check, scoped per list number so the same
+  // configuration is allowed to reappear across different list-number groups.
+  if (row.uploadType === "detailed") {
+    const assetId = row.assetId.trim().toLowerCase();
+    // A blank Asset ID is already flagged by the "required" rule below —
+    // give each blank row its own key here so they don't also collide with
+    // each other as spurious "duplicates".
+    return assetId ? `detailed|${assetId}` : `detailed|blank|${row.rowNumber}`;
+  }
+
   return [
+    row.listNumber.toLowerCase(),
     row.category.toLowerCase(),
     row.condition.toLowerCase(),
     row.brand.toLowerCase(),
@@ -257,7 +289,8 @@ export function validateCsvRows(
   remainingCapacity: number,
   fileLevelErrorsFromParse: string[],
   fileName: string,
-  fileSizeLabel: string
+  fileSizeLabel: string,
+  uploadType: CsvUploadType
 ): CsvValidationResult {
   const fileLevelErrors = [...fileLevelErrorsFromParse];
 
@@ -270,6 +303,14 @@ export function validateCsvRows(
     const isLCD = isLCDCategory(category);
 
     // Required field validation
+    if (!row.listNumber.trim()) {
+      errors.push("List Number is required.");
+    }
+
+    if (uploadType === "detailed" && !row.assetId.trim()) {
+      errors.push("Asset ID is required for detailed uploads.");
+    }
+
     if (!category) {
       errors.push("Category is required.");
     } else if (!VALID_CATEGORY_VALUES.some((c) => c.toLowerCase() === category.toLowerCase())) {
@@ -314,6 +355,8 @@ export function validateCsvRows(
 
     if (!isValidInteger) {
       errors.push("Quantity must be a positive whole number.");
+    } else if (uploadType === "detailed" && qtyNumber !== 1) {
+      errors.push("Detailed uploads must have Quantity = 1 for each row.");
     }
 
     // Duplicate detection (within file)
@@ -372,6 +415,7 @@ export function validateCsvRows(
   return {
     fileName,
     fileSizeLabel,
+    uploadType,
     rows: validatedRows,
     validRows,
     invalidRows,
@@ -390,24 +434,47 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Builds the downloadable CSV template — one unified template for all categories. */
-export function buildCsvTemplate(): string {
-  const header = CSV_REQUIRED_COLUMNS.join(",");
-  const sampleLaptop =
-    "Laptop,New,HP,EliteBook 840 G8,Intel Core i5,11th Gen,8GB,256GB SSD,2.40GHz,Non-Touch,20";
-  const sampleWorkstation =
-    "Workstation,Refurb,Dell,Precision 3660,Intel Core i7,12th Gen,32GB,1TB SSD,3.00GHz,Non-Touch,5";
-  const sampleLcd = "LCD,Used,Dell,P2422H,,,,,,Non-Touch,15";
+/** Builds the downloadable CSV template for the given upload type — one
+ * unified template per type, covering all categories. */
+export function buildCsvTemplate(uploadType: CsvUploadType): string {
+  const header = CSV_REQUIRED_COLUMNS(uploadType).join(",");
+
+  if (uploadType === "detailed") {
+    const sampleLaptop = [
+      "LIST-A", "ASSET-0001", "Laptop", "New", "HP", "EliteBook 840 G8",
+      "Intel Core i5", "11th Gen", "8GB", "256GB SSD", "2.40GHz", "Non-Touch", "1",
+    ].join(",");
+    const sampleWorkstation = [
+      "LIST-A", "ASSET-0002", "Workstation", "Refurb", "Dell", "Precision 3660",
+      "Intel Core i7", "12th Gen", "32GB", "1TB SSD", "3.00GHz", "Non-Touch", "1",
+    ].join(",");
+    const sampleLcd = [
+      "LIST-B", "ASSET-0003", "LCD", "Used", "Dell", "P2422H", "", "", "", "", "", "Non-Touch", "1",
+    ].join(",");
+    return [header, sampleLaptop, sampleWorkstation, sampleLcd].join("\n");
+  }
+
+  const sampleLaptop = [
+    "LIST-A", "Laptop", "New", "HP", "EliteBook 840 G8",
+    "Intel Core i5", "11th Gen", "8GB", "256GB SSD", "2.40GHz", "Non-Touch", "20",
+  ].join(",");
+  const sampleWorkstation = [
+    "LIST-A", "Workstation", "Refurb", "Dell", "Precision 3660",
+    "Intel Core i7", "12th Gen", "32GB", "1TB SSD", "3.00GHz", "Non-Touch", "5",
+  ].join(",");
+  const sampleLcd = [
+    "LIST-B", "LCD", "Used", "Dell", "P2422H", "", "", "", "", "", "Non-Touch", "15",
+  ].join(",");
   return [header, sampleLaptop, sampleWorkstation, sampleLcd].join("\n");
 }
 
-export function downloadCsvTemplate(): void {
-  const csvContent = buildCsvTemplate();
+export function downloadCsvTemplate(uploadType: CsvUploadType): void {
+  const csvContent = buildCsvTemplate(uploadType);
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "inventory_import_template.csv";
+  link.download = `inventory_import_template_${uploadType}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

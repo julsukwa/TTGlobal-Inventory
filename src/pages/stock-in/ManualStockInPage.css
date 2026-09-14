@@ -327,6 +327,54 @@
   color: #cbd5e1;
 }
 
+/* ── List Number + Asset ID toggle (v2 — sit above the form grid) ────────────── */
+
+.manual-form-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.manual-form-top .form-field {
+  width: 100%;
+}
+
+.manual-form-top input {
+  max-width: 420px;
+}
+
+.asset-id-toggle {
+  display: flex;
+  gap: var(--space-5);
+  margin-bottom: var(--space-1);
+}
+
+.asset-id-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  color: var(--color-text-body);
+  cursor: pointer;
+}
+
+.asset-id-toggle-option input[type="radio"] {
+  cursor: pointer;
+}
+
+/* Shared by the "list number already in use" notice and the "quantity should
+   typically be 1" hint — both are informational warnings, not errors. */
+.list-number-warning {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-1);
+}
+
 /* ── Form footer ─────────────────────────────────────────────────────────────── */
 
 .manual-form-footer {
@@ -485,6 +533,19 @@
   color: var(--color-primary);
 }
 
+/* Section-header row separating each List Number group in the session table.
+   Qualified with ".session-table td" so it wins over the generic
+   ".session-table td" padding/border-top rule above on specificity. */
+.session-table td.session-group-header {
+  background: var(--color-surface);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-navy);
+  padding: 8px 16px;
+  border-top: 2px solid var(--color-border);
+  text-align: left;
+}
+
 /* ── Badges ──────────────────────────────────────────────────────────────────── */
 
 .category-badge {
@@ -520,6 +581,30 @@
 .condition-new    { background: var(--color-success-bg); color: #15803d; }
 .condition-refurb { background: var(--color-warning-bg); color: var(--color-warning-text); }
 .condition-used   { background: var(--color-danger-bg); color: #b91c1c; }
+
+.list-number-badge {
+  display: inline-block;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-primary);
+}
+
+.asset-id-generated {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
+.asset-id-provided {
+  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: 600;
+}
 
 /* ── Session table row actions ────────────────────────────────────────────────── */
 
@@ -717,6 +802,11 @@
 
   .manual-form-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .asset-id-toggle {
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   .manual-header {

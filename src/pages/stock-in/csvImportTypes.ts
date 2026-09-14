@@ -6,12 +6,17 @@
 import type { SessionInventoryItem } from "./manualStockInTypes";
 
 /**
- * The raw set of column headers the system accepts in an uploaded CSV.
- * One unified template is used for all categories — LCD rows simply leave
- * the tech-spec columns blank. Workstation rows follow the same field
- * requirements as Laptop/Desktop/All In One (no exemptions).
+ * Which of the two CSV upload flows a file is being imported through:
+ *   'summary'  — Asset IDs are not known yet; the system generates them.
+ *                 Quantity may be greater than 1 per row.
+ *   'detailed' — Asset IDs are already known/printed on the items; each row
+ *                 is exactly one individual item (Quantity must be 1).
  */
-export const CSV_REQUIRED_COLUMNS = [
+export type CsvUploadType = "summary" | "detailed";
+
+/** Summary upload columns — existing behaviour plus List Number. */
+const SUMMARY_COLUMNS = [
+  "List Number",
   "Category",
   "Condition",
   "Brand",
@@ -25,11 +30,41 @@ export const CSV_REQUIRED_COLUMNS = [
   "Quantity",
 ] as const;
 
-export type CsvColumn = (typeof CSV_REQUIRED_COLUMNS)[number];
+/** Detailed upload columns — Summary columns plus Asset ID. */
+const DETAILED_COLUMNS = [
+  "List Number",
+  "Asset ID",
+  "Category",
+  "Condition",
+  "Brand",
+  "Model",
+  "Processor",
+  "Generation",
+  "RAM",
+  "Storage",
+  "Speed",
+  "Comment",
+  "Quantity",
+] as const;
+
+/**
+ * The raw set of column headers the system accepts in an uploaded CSV,
+ * dependent on the selected upload type. LCD rows simply leave the
+ * tech-spec columns blank. Workstation rows follow the same field
+ * requirements as Laptop/Desktop/All In One (no exemptions).
+ */
+export function CSV_REQUIRED_COLUMNS(uploadType: CsvUploadType): readonly string[] {
+  return uploadType === "detailed" ? DETAILED_COLUMNS : SUMMARY_COLUMNS;
+}
+
+export type CsvColumn = (typeof SUMMARY_COLUMNS)[number] | (typeof DETAILED_COLUMNS)[number];
 
 /** A single raw row as parsed straight out of the CSV, before validation. */
 export interface RawCsvRow {
   rowNumber: number; // 1-based, matches the row's position in the file (excluding header)
+  listNumber: string;
+  assetId: string; // present in detailed uploads, empty string in summary
+  uploadType: CsvUploadType;
   category: string;
   condition: string;
   brand: string;
@@ -63,6 +98,7 @@ export interface ValidatedCsvRow extends RawCsvRow {
 export interface CsvValidationResult {
   fileName: string;
   fileSizeLabel: string;
+  uploadType: CsvUploadType;
   rows: ValidatedCsvRow[];
   validRows: ValidatedCsvRow[];
   invalidRows: ValidatedCsvRow[];
@@ -80,6 +116,9 @@ export function csvRowToSessionItem(
 ): SessionInventoryItem {
   return {
     id: idSeed,
+    listNumber: row.listNumber,
+    assetIdSource: row.uploadType === "detailed" ? "provided" : "generated",
+    providedAssetId: row.uploadType === "detailed" ? row.assetId : "",
     category: row.category,
     condition: row.condition,
     brand: row.brand,

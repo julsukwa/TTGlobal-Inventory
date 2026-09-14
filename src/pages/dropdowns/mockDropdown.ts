@@ -79,6 +79,14 @@ export const dropdownValues = {
     { id: 1, name: "Screen Fault", dateAdded: "10/05/2024" },
     { id: 2, name: "Battery Fault", dateAdded: "10/05/2024" },
     { id: 3, name: "Keyboard Fault", dateAdded: "10/05/2024" },
+    { id: 4, name: "LCD Spot", dateAdded: "10/05/2024" },
+    { id: 5, name: "Dead Board", dateAdded: "10/05/2024" },
+    { id: 6, name: "No Display", dateAdded: "10/05/2024" },
+    { id: 7, name: "HDD Failure", dateAdded: "10/05/2024" },
+    { id: 8, name: "No Power", dateAdded: "10/05/2024" },
+    { id: 9, name: "Touchpad Fault", dateAdded: "10/05/2024" },
+    { id: 10, name: "RAM Fault", dateAdded: "10/05/2024" },
+    { id: 11, name: "Overheating", dateAdded: "10/05/2024" },
   ],
 
   vendor: [
