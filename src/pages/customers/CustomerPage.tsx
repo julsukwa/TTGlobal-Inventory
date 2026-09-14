@@ -1,3 +1,14 @@
+// ─── Customers Page ─────────────────────────────────────────────────────────
+//
+// Lists all customers in the system with search, location filtering, and
+// pagination. Supports inline add/edit/delete via modals, and exporting the
+// current filtered list to an .xlsx report. Customer Name and Phone Number
+// are the only required fields — Email and Location are optional.
+//
+// BACKEND INTEGRATION SEAM: customers are held in local state seeded from
+// mockCustomers; a real API would back CRUD here (GET/POST/PATCH/DELETE
+// /customers).
+
 import "./CustomerPage.css";
 import mockCustomers from "./mockCustomers";
 import { useState } from "react";
@@ -13,14 +24,7 @@ import {
   Filter,
 } from "lucide-react";
 
-type Customer = {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  location: string;
-  dateAdded: string;
-};
+import type { Customer } from "../stock-out/stockOutTypes";
 
 function CustomerPage() {
   const [showModal, setShowModal] = useState(false);
@@ -37,10 +41,15 @@ function CustomerPage() {
   const [selectedLocation, setSelectedLocation] = useState("All Locations");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [formErrors, setFormErrors] = useState<{ name?: string; phone?: string }>({});
 
   const handleSaveCustomer = () => {
-  if (!customerName || !phoneNumber) {
-    alert("Customer Name and Phone Number are required");
+  const newErrors: { name?: string; phone?: string } = {};
+  if (!customerName.trim()) newErrors.name = "Customer Name is required.";
+  if (!phoneNumber.trim()) newErrors.phone = "Phone Number is required.";
+
+  if (Object.keys(newErrors).length > 0) {
+    setFormErrors(newErrors);
     return;
   }
 
@@ -82,6 +91,7 @@ function CustomerPage() {
   setLocation("");
 
   setEditingCustomer(null);
+  setFormErrors({});
 
   setShowModal(false);
 };
@@ -93,6 +103,7 @@ function CustomerPage() {
   setPhoneNumber(customer.phone);
   setEmailAddress(customer.email);
   setLocation(customer.location);
+  setFormErrors({});
 
   setShowModal(true);
 };
@@ -222,7 +233,10 @@ const locations = [
 
           <button
             className="btn-primary"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setFormErrors({});
+              setShowModal(true);
+            }}
           >
             <Plus size={16} />
             Add New Customer
@@ -463,7 +477,10 @@ const locations = [
 
               <button
                 className="close-btn"
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  setShowModal(false);
+                  setFormErrors({});
+                }}
               >
                 <X size={18} />
               </button>
@@ -479,10 +496,17 @@ const locations = [
                 <input
                   type="text"
                   value={customerName}
-                  onChange={(e) =>
-                    setCustomerName(e.target.value)
-                  }
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    setFormErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                 />
+
+                {formErrors.name && (
+                  <span className="field-error">
+                    {formErrors.name}
+                  </span>
+                )}
 
               </div>
 
@@ -493,10 +517,17 @@ const locations = [
                 <input
                   type="text"
                   value={phoneNumber}
-                  onChange={(e) =>
-                    setPhoneNumber(e.target.value)
-                  }
+                  onChange={(e) => {
+                    setPhoneNumber(e.target.value);
+                    setFormErrors((prev) => ({ ...prev, phone: undefined }));
+                  }}
                 />
+
+                {formErrors.phone && (
+                  <span className="field-error">
+                    {formErrors.phone}
+                  </span>
+                )}
 
               </div>
 
@@ -534,7 +565,10 @@ const locations = [
 
               <button
                 className="modal-cancel"
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  setShowModal(false);
+                  setFormErrors({});
+                }}
               >
                 Cancel
               </button>

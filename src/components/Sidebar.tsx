@@ -12,7 +12,11 @@ import {
   ListFilter,
   ArrowDownToLine,
   ArrowUpFromLine,
+  LogOut,
 } from "lucide-react";
+
+import { useAuth } from "../context/AuthContext";
+import { canView } from "../utils/permissions";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,6 +24,16 @@ interface SidebarProps {
 }
 
 function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const { user, logout } = useAuth();
+
+  // Hides a nav item entirely (not disabled) when the current role has no
+  // view permission for that module — see src/utils/permissions.ts.
+  const canSee = (moduleKey: string) => !!user && canView(user.role, moduleKey);
+
+  const showSystemSection =
+    canSee("adjustments") || canSee("database") || canSee("dropdowns");
+  const showStockSection = canSee("stockIn") || canSee("stockOut");
+
   return (
     <aside className={`sidebar${isOpen ? " sidebar--open" : ""}`}>
 
@@ -38,98 +52,137 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
           <span>MAIN</span>
         </div>
 
-        <NavLink
-          to="/dashboard"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <LayoutDashboard size={16} />
-          <span>Dashboard</span>
-        </NavLink>
+        {canSee("dashboard") && (
+          <NavLink
+            to="/dashboard"
+            onClick={onClose}
+            className={({ isActive }) =>
+              isActive ? "sidebar-item active-item" : "sidebar-item"
+            }
+          >
+            <LayoutDashboard size={16} />
+            <span>Dashboard</span>
+          </NavLink>
+        )}
 
-        <div className="sidebar-item">
-          <Users size={16} />
-          <span>Staff</span>
-        </div>
+        {canSee("staff") && (
+          <NavLink
+            to="/staff"
+            onClick={onClose}
+            className={({ isActive }) =>
+              isActive ? "sidebar-item active-item" : "sidebar-item"
+            }
+          >
+            <Users size={16} />
+            <span>Staff</span>
+          </NavLink>
+        )}
 
-        <NavLink
-          to="/customers"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <UserRound size={16} />
-          <span>Customers</span>
-        </NavLink>
+        {canSee("customers") && (
+          <NavLink
+            to="/customers"
+            onClick={onClose}
+            className={({ isActive }) =>
+              isActive ? "sidebar-item active-item" : "sidebar-item"
+            }
+          >
+            <UserRound size={16} />
+            <span>Customers</span>
+          </NavLink>
+        )}
 
-        <NavLink
-          to="/shipments"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <Truck size={16} />
-          <span>Shipments</span>
-        </NavLink>
+        {canSee("shipments") && (
+          <NavLink
+            to="/shipments"
+            onClick={onClose}
+            className={({ isActive }) =>
+              isActive ? "sidebar-item active-item" : "sidebar-item"
+            }
+          >
+            <Truck size={16} />
+            <span>Shipments</span>
+          </NavLink>
+        )}
 
         {/* SYSTEM SETTINGS */}
-        <div className="sidebar-section">
-          <span>SYSTEM SETTINGS</span>
-        </div>
+        {showSystemSection && (
+          <>
+            <div className="sidebar-section">
+              <span>SYSTEM SETTINGS</span>
+            </div>
 
-        <div className="sidebar-item">
-          <Settings size={16} />
-          <span>Adjustments</span>
-        </div>
+            {canSee("adjustments") && (
+              <div className="sidebar-item">
+                <Settings size={16} />
+                <span>Adjustments</span>
+              </div>
+            )}
 
-        <div className="sidebar-item">
-          <Database size={16} />
-          <span>Database</span>
-        </div>
+            {canSee("database") && (
+              <div className="sidebar-item">
+                <Database size={16} />
+                <span>Database</span>
+              </div>
+            )}
 
-        <NavLink
-          to="/dropdowns"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <ListFilter size={16} />
-          <span>Dropdowns</span>
-        </NavLink>
+            {canSee("dropdowns") && (
+              <NavLink
+                to="/dropdowns"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
+                <ListFilter size={16} />
+                <span>Dropdowns</span>
+              </NavLink>
+            )}
+          </>
+        )}
 
         {/* STOCK */}
-        <div className="sidebar-section">
-          <span>STOCK</span>
-        </div>
+        {showStockSection && (
+          <>
+            <div className="sidebar-section">
+              <span>STOCK</span>
+            </div>
 
-        <NavLink
-          to="/stock-in"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <ArrowDownToLine size={16} />
-          <span>Stock In</span>
-        </NavLink>
+            {canSee("stockIn") && (
+              <NavLink
+                to="/stock-in"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
+                <ArrowDownToLine size={16} />
+                <span>Stock In</span>
+              </NavLink>
+            )}
 
-        <NavLink
-          to="/stock-out"
-          onClick={onClose}
-          className={({ isActive }) =>
-            isActive ? "sidebar-item active-item" : "sidebar-item"
-          }
-        >
-          <ArrowUpFromLine size={16} />
-          <span>Stock Out</span>
-        </NavLink>
+            {canSee("stockOut") && (
+              <NavLink
+                to="/stock-out"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
+                <ArrowUpFromLine size={16} />
+                <span>Stock Out</span>
+              </NavLink>
+            )}
+          </>
+        )}
 
       </nav>
+
+      {/* Logout — pinned to the bottom of the sidebar via .sidebar-logout-btn's
+          margin-top: auto on this flex column. */}
+      <button className="sidebar-logout-btn" onClick={logout}>
+        <LogOut size={16} />
+        <span>Logout</span>
+      </button>
 
     </aside>
   );

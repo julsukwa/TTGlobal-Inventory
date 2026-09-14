@@ -7,7 +7,7 @@
 
 .processing-breadcrumb {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-bottom: 16px;
 }
 
@@ -30,12 +30,12 @@
 .processing-header-icon {
   width: 52px;
   height: 52px;
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   background: #eff6ff;
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #2563eb;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -52,20 +52,20 @@
   margin: 0 0 6px;
   font-size: 26px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .processing-header-left p {
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 /* Batch ID card */
 .batch-id-card {
   background: #f0fdf4;
   border: 1.5px solid #86efac;
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   padding: 14px 24px;
   min-width: 220px;
   flex-shrink: 0;
@@ -112,9 +112,9 @@
 .processing-summary-strip {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 16px 0;
   margin-bottom: 24px;
 }
@@ -127,20 +127,20 @@
 }
 
 .ps-item:not(:last-child) {
-  border-right: 1px solid #edf2f7;
+  border-right: 1px solid var(--color-border-light);
 }
 
 .ps-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: flex;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
 }
 
-.ps-icon-blue   { background: #eff6ff; color: #2563eb; }
+.ps-icon-blue   { background: #eff6ff; color: var(--color-primary); }
 .ps-icon-purple { background: #f3e8ff; color: #9333ea; }
 .ps-icon-orange { background: #ffedd5; color: #ea580c; }
 .ps-icon-gray   { background: #f1f5f9; color: #475569; }
@@ -148,7 +148,7 @@
 .ps-item span {
   display: block;
   font-size: 11px;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin-bottom: 4px;
 }
 
@@ -156,7 +156,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .ps-item .vendor-name {
@@ -166,7 +166,7 @@
 .ps-item p {
   margin: 3px 0 0;
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
 }
 
 /* ── Three-column body ──────────────────────────────────────────────────────── */
@@ -179,9 +179,9 @@
 }
 
 .processing-card {
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 24px;
 }
 
@@ -189,7 +189,7 @@
   margin: 0 0 20px;
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 /* ── Progress card ───────────────────────────────────────────────────────────── */
@@ -205,28 +205,28 @@
   flex: 1;
   height: 8px;
   background: #dbeafe;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: #2563eb;
-  border-radius: 999px;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
   transition: width 0.5s ease;
 }
 
 .progress-pct {
   font-size: 14px;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--color-primary);
   min-width: 36px;
   text-align: right;
 }
 
 .progress-status-msg {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin: 0 0 24px;
   font-style: italic;
 }
@@ -266,13 +266,13 @@
 
 .step-dot-done {
   background: #16a34a;
-  color: #fff;
+  color: var(--color-white);
   font-weight: 700;
 }
 
 .step-dot-active {
-  background: #2563eb;
-  border: 2px solid #2563eb;
+  background: var(--color-primary);
+  border: 2px solid var(--color-primary);
 }
 
 .pulse-ring {
@@ -280,7 +280,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-white);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -290,7 +290,7 @@
 }
 
 .step-dot-pending {
-  background: #fff;
+  background: var(--color-white);
   border: 2px solid #cbd5e1;
 }
 
@@ -313,16 +313,16 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #172b4d;
+  color: var(--color-navy);
   margin-bottom: 3px;
 }
 
 .step-text span {
   font-size: 11px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
-.step-pending .step-text strong { color: #94a3b8; }
+.step-pending .step-text strong { color: var(--color-text-faint); }
 
 /* ── Live stats card ────────────────────────────────────────────────────────── */
 
@@ -342,14 +342,14 @@
 .stat-icon {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
 }
 
-.stat-icon-blue   { background: #eff6ff; color: #2563eb; }
+.stat-icon-blue   { background: #eff6ff; color: var(--color-primary); }
 .stat-icon-purple { background: #f3e8ff; color: #9333ea; }
 .stat-icon-orange { background: #ffedd5; color: #ea580c; }
 .stat-icon-pink   { background: #fdf2f8; color: #db2777; }
@@ -374,7 +374,7 @@
   align-items: flex-start;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   color: #1e40af;
   font-size: 13px;
@@ -404,7 +404,7 @@
 
 .log-empty {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   font-style: italic;
 }
 
@@ -423,16 +423,16 @@
 }
 
 .log-dot-done     { background: #16a34a; }
-.log-dot-progress { background: #2563eb; }
+.log-dot-progress { background: var(--color-primary); }
 
 .log-time {
-  color: #94a3b8;
+  color: var(--color-text-faint);
   min-width: 80px;
   font-size: 11px;
 }
 
 .log-message {
-  color: #374151;
+  color: var(--color-text-body);
 }
 
 /* ── Warning footer ─────────────────────────────────────────────────────────── */
@@ -443,10 +443,10 @@
   gap: 10px;
   background: #fffbeb;
   border: 1px solid #fde68a;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 14px 20px;
   font-size: 13px;
-  color: #92400e;
+  color: var(--color-warning-text);
   font-weight: 500;
 }
 

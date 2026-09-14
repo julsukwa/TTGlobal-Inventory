@@ -1,3 +1,12 @@
+// ─── Dropdown Management Page ───────────────────────────────────────────────
+//
+// Admin screen for managing the fixed value lists used throughout the system
+// (Item Type, Fault, Vendor, Brand, RAM, Storage, Processor, Condition,
+// Generation) — e.g. the category/condition options offered during Stock In.
+// Values can only be added or edited, not deactivated/removed (per product
+// decision — see mockDropdown.ts). Each category is searched and paginated
+// independently; switching category or searching resets to page 1.
+
 import "./DropdownPage.css";
 import { useState } from "react";
 
@@ -40,509 +49,271 @@ const categoryIcons = {
 };
 
 function DropdownPage() {
-  const [selectedCategory, setSelectedCategory] =
-    useState("itemType");
+  const [selectedCategory, setSelectedCategory] = useState("itemType");
+  const [dropdownData, setDropdownData] = useState<DropdownData>(dropdownValues as DropdownData);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<DropdownValue | null>(null);
+  const [valueName, setValueName] = useState("");
+  const [valueError, setValueError] = useState<string | null>(null);
 
-  const [dropdownData, setDropdownData] =
-    useState<DropdownData>(
-      dropdownValues as DropdownData
-    );
+  const currentValues = dropdownData[selectedCategory] || [];
 
-  const [searchTerm, setSearchTerm] =
-    useState("");
+  const filteredValues = currentValues.filter((item) =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    const [currentPage, setCurrentPage] =
-  useState(1);
-
-    const itemsPerPage = 5;
-
-  const [showModal, setShowModal] =
-    useState(false);
-
-  const [editingItem, setEditingItem] =
-    useState<DropdownValue | null>(null);
-
-  const [valueName, setValueName] =
-    useState("");
-
-  const currentValues =
-    dropdownData[selectedCategory] || [];
-
-  const filteredValues =
-    currentValues.filter((item) =>
-      item.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-    );
-
-    const totalPages = Math.ceil(
-    filteredValues.length / itemsPerPage
-    );
-
-    const startIndex =
-    (currentPage - 1) * itemsPerPage;
-
-    const paginatedValues =
-    filteredValues.slice(
-        startIndex,
-        startIndex + itemsPerPage
-    );
+  const totalPages = Math.ceil(filteredValues.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedValues = filteredValues.slice(startIndex, startIndex + itemsPerPage);
 
   const handleAddClick = () => {
     setEditingItem(null);
     setValueName("");
+    setValueError(null);
     setShowModal(true);
   };
 
-  const handleEditClick = (
-    item: DropdownValue
-  ) => {
+  const handleEditClick = (item: DropdownValue) => {
     setEditingItem(item);
     setValueName(item.name);
+    setValueError(null);
     setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setValueError(null);
   };
 
   const handleSave = () => {
-
-    const trimmedName =
-      valueName.trim();
+    const trimmedName = valueName.trim();
 
     if (!trimmedName) {
-      alert(
-        "Value name cannot be empty."
-      );
+      setValueError("Value name cannot be empty.");
       return;
     }
 
     if (trimmedName.length > 50) {
-      alert(
-        "Value name cannot exceed 50 characters."
-      );
+      setValueError("Value name cannot exceed 50 characters.");
       return;
     }
 
-    const duplicate =
-      currentValues.find(
-        (item) =>
-          item.name.toLowerCase() ===
-            trimmedName.toLowerCase() &&
-          item.id !==
-            editingItem?.id
-      );
+    const duplicate = currentValues.find(
+      (item) =>
+        item.name.toLowerCase() === trimmedName.toLowerCase() &&
+        item.id !== editingItem?.id
+    );
 
     if (duplicate) {
-      alert(
-        `"${trimmedName}" already exists.`
-      );
+      setValueError(`"${trimmedName}" already exists.`);
       return;
     }
 
     if (editingItem) {
-
       setDropdownData((prev) => ({
         ...prev,
-
-        [selectedCategory]:
-          prev[
-            selectedCategory
-          ].map((item) =>
-            item.id === editingItem.id
-              ? {
-                  ...item,
-                  name: trimmedName,
-                }
-              : item
-          ),
+        [selectedCategory]: prev[selectedCategory].map((item) =>
+          item.id === editingItem.id ? { ...item, name: trimmedName } : item
+        ),
       }));
-
     } else {
-
       const newItem: DropdownValue = {
         id: Date.now(),
-
         name: trimmedName,
-
-        dateAdded:
-          new Date().toLocaleDateString(
-            "en-GB"
-          ),
+        dateAdded: new Date().toLocaleDateString("en-GB"),
       };
 
       setDropdownData((prev) => ({
         ...prev,
-
-        [selectedCategory]: [
-          ...prev[selectedCategory],
-          newItem,
-        ],
+        [selectedCategory]: [...prev[selectedCategory], newItem],
       }));
     }
 
+    setValueError(null);
     setShowModal(false);
   };
 
-  const getCategoryCount = (
-    categoryId: string
-  ) => {
-    return (
-      dropdownData[
-        categoryId
-      ]?.length || 0
-    );
+  const getCategoryCount = (categoryId: string) => {
+    return dropdownData[categoryId]?.length || 0;
   };
 
-    return (
+  return (
     <div className="dropdown-page">
 
       <div className="dropdown-header">
-
         <div>
           <h1>Dropdown Management</h1>
-
-          <p>
-            Manage all dropdown values used
-            throughout the Inventory System.
-          </p>
+          <p>Manage all dropdown values used throughout the Inventory System.</p>
         </div>
-
       </div>
 
       <div className="dropdown-layout">
 
         {/* LEFT PANEL */}
-
         <div className="dropdown-sidebar">
+          <div className="sidebar-title">Categories</div>
 
-          <div className="sidebar-title">
-            Categories
-          </div>
+          {dropdownCategories.map((category) => (
+            <button
+              key={category.id}
+              className={`category-btn ${
+                selectedCategory === category.id ? "active-category" : ""
+              }`}
+              onClick={() => {
+                setSelectedCategory(category.id);
+                setCurrentPage(1);
+              }}
+            >
+              <div className="category-left">
+                {categoryIcons[category.id as keyof typeof categoryIcons]}
+                <span>{category.name}</span>
+              </div>
 
-          {dropdownCategories.map(
-            (category) => (
-
-              <button
-                key={category.id}
-                className={`category-btn ${
-                    selectedCategory === category.id
-                    ? "active-category"
-                    : ""
-                }`}
-                onClick={() =>{
-                    setSelectedCategory(category.id);
-                    setCurrentPage(1);
-                }}
-                >
-
-                <div className="category-left">
-
-                    {
-                    categoryIcons[
-                        category.id as keyof typeof categoryIcons
-                    ]
-                    }
-
-                    <span>
-                    {category.name}
-                    </span>
-
-                </div>
-
-                <span className="category-count">
-                    {getCategoryCount(category.id)}
-                </span>
-
-                </button>
-            )
-          )}
-
+              <span className="category-count">{getCategoryCount(category.id)}</span>
+            </button>
+          ))}
         </div>
 
         {/* RIGHT PANEL */}
-
         <div className="dropdown-content">
 
           <div className="dropdown-toolbar">
-
             <div className="search-box">
-
               <Search size={16} />
-
               <input
                 type="text"
                 placeholder="Search value..."
                 value={searchTerm}
-                onChange={(e) =>{
-                  setSearchTerm(
-                    e.target.value
-                  );
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
               />
-
             </div>
 
             <div className="toolbar-actions">
-
-              <button
-                className="add-btn"
-                onClick={
-                  handleAddClick
-                }
-              >
-
+              <button className="add-btn" onClick={handleAddClick}>
                 <Plus size={16} />
-
                 Add Value
-
               </button>
-
             </div>
-
           </div>
 
           <div className="table-card">
-
             <table className="dropdown-table">
-
               <thead>
-
                 <tr>
-
                   <th>Name</th>
-
-                  <th>
-                    Date Added
-                  </th>
-
-                  <th>
-                    Actions
-                  </th>
-
+                  <th>Date Added</th>
+                  <th>Actions</th>
                 </tr>
-
               </thead>
 
               <tbody>
-
-                {filteredValues.length >
-                0 ? (
-
-                  paginatedValues.map(
-                    (item) => (
-
-                      <tr
-                        key={item.id}
-                      >
-
-                        <td>
-                          {item.name}
-                        </td>
-
-                        <td>
-                          {
-                            item.dateAdded
-                          }
-                        </td>
-
-                        <td>
-
-                          <div className="action-buttons">
-
-                            <button
-                              className="edit-btn"
-                              onClick={() =>
-                                handleEditClick(
-                                  item
-                                )
-                              }
-                            >
-                              <Pencil
-                                size={
-                                  15
-                                }
-                              />
-                            </button>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-
-                    )
-                  )
-
+                {filteredValues.length > 0 ? (
+                  paginatedValues.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.name}</td>
+                      <td>{item.dateAdded}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="edit-btn" onClick={() => handleEditClick(item)}>
+                            <Pencil size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : (
-
                   <tr>
-
-                    <td
-                      colSpan={3}
-                      className="empty-state"
-                    >
+                    <td colSpan={3} className="empty-state">
                       No values found
                     </td>
-
                   </tr>
-
                 )}
-
               </tbody>
-
             </table>
 
-                <div className="dropdown-pagination">
-
-            <span>
+            <div className="dropdown-pagination">
+              <span>
                 Showing{" "}
-                {filteredValues.length === 0
-                ? 0
-                : startIndex + 1}
+                {filteredValues.length === 0 ? 0 : startIndex + 1}
                 {" "}to{" "}
-                {Math.min(
-                startIndex +
-                    itemsPerPage,
-                filteredValues.length
-                )}
+                {Math.min(startIndex + itemsPerPage, filteredValues.length)}
                 {" "}of{" "}
                 {filteredValues.length}
                 {" "}entries
-            </span>
+              </span>
 
-            <div className="pagination-buttons">
-
+              <div className="pagination-buttons">
                 <button
-                disabled={
-                    currentPage === 1
-                }
-                onClick={() =>
-                    setCurrentPage(
-                    currentPage - 1
-                    )
-                }
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(currentPage - 1)}
                 >
-                Previous
+                  Previous
                 </button>
 
                 <span>
-                Page {currentPage} of{" "}
-                {totalPages || 1}
+                  Page {currentPage} of {totalPages || 1}
                 </span>
 
                 <button
-                disabled={
-                    currentPage ===
-                    totalPages
-                }
-                onClick={() =>
-                    setCurrentPage(
-                    currentPage + 1
-                    )
-                }
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(currentPage + 1)}
                 >
-                Next
+                  Next
                 </button>
-
-            </div>
-
+              </div>
             </div>
           </div>
-
-          
         </div>
-
       </div>
 
       {/* MODAL */}
-
       {showModal && (
-
-        <div
-          className="modal-overlay"
-          onClick={() =>
-            setShowModal(false)
-          }
-        >
-
-          <div
-            className="dropdown-modal"
-            onClick={(e) =>
-              e.stopPropagation()
-            }
-          >
-
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="dropdown-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-
-              <h2>
-                {editingItem
-                  ? "Edit Value"
-                  : "Add Value"}
-              </h2>
-
-              <button
-                className="close-btn"
-                onClick={() =>
-                  setShowModal(
-                    false
-                  )
-                }
-              >
+              <h2>{editingItem ? "Edit Value" : "Add Value"}</h2>
+              <button className="close-btn" onClick={closeModal}>
                 <X size={18} />
               </button>
-
             </div>
 
             <div className="modal-body">
-
               <div className="form-group">
-
-                <label>
-                  Value Name
-                </label>
-
+                <label>Value Name</label>
                 <input
                   type="text"
                   value={valueName}
-                  onChange={(e) =>
-                    setValueName(
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => {
+                    setValueName(e.target.value);
+                    setValueError(null);
+                  }}
                   autoFocus
                 />
-
+                {valueError && (
+                  <span className="field-error">
+                    {valueError}
+                  </span>
+                )}
               </div>
-
             </div>
 
             <div className="modal-footer">
-
-              <button
-                className="cancel-btn"
-                onClick={() =>
-                  setShowModal(
-                    false
-                  )
-                }
-              >
+              <button className="cancel-btn" onClick={closeModal}>
                 Cancel
               </button>
-
-              <button
-                className="save-btn"
-                onClick={handleSave}
-              >
+              <button className="save-btn" onClick={handleSave}>
                 Save
               </button>
-
             </div>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }

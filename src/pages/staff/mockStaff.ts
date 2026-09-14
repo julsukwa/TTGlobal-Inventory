@@ -1,0 +1,66 @@
+import type { StaffMember } from "./staffTypes";
+
+const mockStaff: StaffMember[] = [
+  {
+    id: 1,
+    fullName: "System Administrator",
+    username: "admin",
+    role: "admin",
+    status: "Active",
+    email: "admin@ttglobal.com",
+    lastLogin: "14/09/2026 09:12 AM",
+    dateCreated: "01/01/2024",
+  },
+  {
+    id: 2,
+    fullName: "Chinedu Okoro",
+    username: "chinedu.okoro",
+    role: "admin",
+    status: "Active",
+    email: "chinedu.okoro@ttglobal.com",
+    lastLogin: "13/09/2026 04:47 PM",
+    dateCreated: "18/03/2025",
+  },
+  {
+    id: 3,
+    fullName: "Amaka Nwosu",
+    username: "amaka.nwosu",
+    role: "sales",
+    status: "Active",
+    email: "amaka.nwosu@ttglobal.com",
+    lastLogin: "12/09/2026 11:05 AM",
+    dateCreated: "02/06/2025",
+  },
+  {
+    id: 4,
+    fullName: "Tunde Bakare",
+    username: "tunde.bakare",
+    role: "warehouse",
+    status: "Inactive",
+    email: "",
+    lastLogin: "20/07/2026 08:30 AM",
+    dateCreated: "14/11/2025",
+  },
+  {
+    id: 5,
+    fullName: "Ngozi Eze",
+    username: "ngozi.eze",
+    role: "warranty",
+    status: "Active",
+    email: "ngozi.eze@ttglobal.com",
+    lastLogin: "Never",
+    dateCreated: "05/09/2026",
+  },
+  {
+    id: 6,
+    fullName: "Ibrahim Suleiman",
+    username: "ibrahim.suleiman",
+    role: "warehouse",
+    status: "Inactive",
+    email: "ibrahim.suleiman@ttglobal.com",
+    lastLogin: "02/02/2026 03:15 PM",
+    dateCreated: "22/08/2024",
+  },
+];
+
+export default mockStaff;

@@ -1,0 +1,72 @@
+/* ─── Design Tokens ───────────────────────────────────────────────────────────
+ * Canonical CSS custom properties for the TT Global Inventory System.
+ * Every colour, spacing, radius, font, and shadow value used across the app
+ * should reference one of these tokens rather than a hardcoded literal.
+ */
+
+:root {
+  /* Colours */
+  --color-navy: #172b4d;
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-surface: #e8edf5;
+  --color-surface-light: #f8fafc;
+  --color-border: #dce3ed;
+  --color-border-light: #edf2f7;
+  --color-text-body: #374151;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+  --color-white: #ffffff;
+  --color-success-bg: #dcfce7;
+  --color-success-text: #166534;
+  --color-danger-bg: #fee2e2;
+  --color-danger-text: #991b1b;
+  --color-danger: #ef4444;
+  --color-danger-dark: #dc2626;
+  --color-warning-bg: #fef3c7;
+  --color-warning-text: #92400e;
+  --color-issued-bg: #e0e7ff;
+  --color-issued-text: #3730a3;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
+  --font-size-4xl: 30px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+/* Shared inline validation error message, used beneath form fields. */
+.field-error {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger-text);
+  margin-top: var(--space-1);
+}

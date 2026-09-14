@@ -1,3 +1,10 @@
+// ─── Add Customer Page ──────────────────────────────────────────────────────
+//
+// Standalone "create customer" form, reachable from /customers/new. Currently
+// a static layout only — fields are uncontrolled and Save/Cancel have no
+// handlers wired up yet; the customer creation flow used today is the modal
+// inside CustomerPage.tsx (see handleSaveCustomer there).
+
 import "./AddCustomerPage.css";
 
 function AddCustomerPage() {

@@ -38,12 +38,12 @@ html, body, #root {
   position: relative;
   width: 360px;
   max-width: 90vw;
-  background: white;
+  background: var(--color-white);
 
   padding: 30px 28px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
 
   text-align: center;
   z-index: 2;
@@ -60,7 +60,7 @@ html, body, #root {
   margin: 5px 0 15px;
   font-size: 15px;
   letter-spacing: 2px;
-  color: #2b6cb0;
+  color: var(--color-primary);
   font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
 }
 
@@ -86,10 +86,10 @@ label {
   align-items: center;
 
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 
   padding: 8px 10px;
-  background: #fff;
+  background: var(--color-white);
 }
 
 .input-group input {
@@ -115,14 +115,14 @@ label {
 /* BUTTON */
 .login-btn {
   width: 100%;
-  margin-top: 20px;
+  margin-top: 30px;
 
   padding: 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 
-  background: linear-gradient(90deg, #2b9ccf, #1e5aa8);
-  color: white;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
+  color: var(--color-white);
 
   font-weight: bold;
   cursor: pointer;

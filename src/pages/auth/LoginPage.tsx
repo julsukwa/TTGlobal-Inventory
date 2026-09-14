@@ -1,13 +1,23 @@
-import { useState } from "react";
+// ─── Login Page ─────────────────────────────────────────────────────────────
+//
+// Entry point for the app — collects username/password and authenticates
+// against a hardcoded admin/admin check (no backend yet — see AuthContext.tsx
+// for where a real API call will replace this). On success, starts a session
+// via AuthContext.login and navigates to the dashboard. A visitor who is
+// already authenticated (e.g. hit "/" directly with a session still active)
+// is bounced straight to the dashboard instead of seeing the form again.
+
+import { useEffect, useState } from "react";
 import "./LoginPage.css";
 import TTglobal from "../../assets/TTglobal.jpg";
 import { useNavigate } from "react-router-dom";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 
-import { loginUser } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
 
 function LoginPage() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const { login, isAuthenticated } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -16,23 +26,28 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleLogin = async () => {
     setLoading(true);
     setError("");
 
-    const response = await loginUser({
-      username,
-      password,
-    });
+    // MOCK AUTH (for now - backend will replace this)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     setLoading(false);
 
-    if (!response.success) {
-  setError(response.message);
-  return;
-}
+    if (username !== "admin" || password !== "admin") {
+      setError("Incorrect Username Or Password");
+      return;
+    }
 
-navigate("/dashboard");
+    login(username, "admin");
+    navigate("/dashboard");
   };
 
   return (
@@ -48,7 +63,7 @@ navigate("/dashboard");
 
         {/* ERROR MESSAGE */}
         {error && (
-          <p style={{ color: "red", fontSize: "12px", marginBottom: "10px" }}>
+          <p className="field-error">
             {error}
           </p>
         )}

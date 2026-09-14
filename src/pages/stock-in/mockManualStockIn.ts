@@ -14,7 +14,8 @@ export const mockSessionItems: SessionInventoryItem[] = [
     ram: "8GB",
     storage: "256GB SSD",
     speed: "2.4GHz",
-    comment: "Standard Unit",
+    screenType: "Standard Unit",
+    additionalInfo: "",
     quantity: 20,
   },
 
@@ -29,7 +30,8 @@ export const mockSessionItems: SessionInventoryItem[] = [
     ram: "16GB",
     storage: "512GB SSD",
     speed: "2.6GHz",
-    comment: "Touch Screen",
+    screenType: "Touch Screen",
+    additionalInfo: "",
     quantity: 15,
   },
 
@@ -44,7 +46,8 @@ export const mockSessionItems: SessionInventoryItem[] = [
     ram: "8GB",
     storage: "256GB SSD",
     speed: "3.2GHz",
-    comment: "Standard Unit",
+    screenType: "Standard Unit",
+    additionalInfo: "",
     quantity: 10,
   },
 ];

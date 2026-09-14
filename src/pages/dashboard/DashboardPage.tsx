@@ -1,3 +1,11 @@
+// ─── Dashboard Page ─────────────────────────────────────────────────────────
+//
+// Landing page after login — gives a high-level snapshot of inventory health:
+// KPI cards (received/issued/available/faulty/low-stock), an inventory-by-item
+// overview table, a stock-by-location breakdown, and a recent-activity feed.
+// All figures shown here are static placeholder data; this page is not yet
+// wired to live inventory totals.
+
 import "./DashboardPage.css";
 
 function DashboardPage() {

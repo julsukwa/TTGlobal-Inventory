@@ -4,7 +4,7 @@
 
 .scan-breadcrumb {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-bottom: 12px;
 }
 
@@ -21,22 +21,22 @@
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .scan-header p {
   margin-top: 6px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .scan-back-btn {
   height: 38px;
   padding: 0 16px;
   border: 1px solid #dbeafe;
-  background: white;
-  color: #2563eb;
-  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -53,9 +53,9 @@
 .scan-context-banner {
   display: flex;
   align-items: center;
-  background: white;
-  border: 1px solid #e8edf5;
-  border-radius: 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-xl);
   padding: 14px 20px;
   margin-bottom: 20px;
   gap: 0;
@@ -67,7 +67,7 @@
   gap: 10px;
   padding: 0 20px;
   flex: 1;
-  color: #2563eb;
+  color: var(--color-primary);
 }
 
 .scan-context-item:first-child { padding-left: 0; }
@@ -75,7 +75,7 @@
 .scan-context-item > div span {
   display: block;
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-bottom: 2px;
 }
 
@@ -83,7 +83,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .scan-context-label-icon {
@@ -91,7 +91,7 @@
 }
 
 .scan-count {
-  color: #2563eb !important;
+  color: var(--color-primary) !important;
   font-size: 18px !important;
   font-weight: 800 !important;
 }
@@ -99,7 +99,7 @@
 .scan-context-divider {
   width: 1px;
   height: 36px;
-  background: #edf2f7;
+  background: var(--color-border-light);
   flex-shrink: 0;
 }
 
@@ -115,9 +115,9 @@
 /* ── Scanner input card ───────────────────────────────────────────────────── */
 
 .scan-input-card {
-  background: white;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 22px;
   align-self: start;
 }
@@ -127,19 +127,19 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  color: #2563eb;
+  color: var(--color-primary);
 }
 
 .scan-input-header h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .scan-input-desc {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin: 0 0 18px;
   line-height: 1.5;
 }
@@ -152,12 +152,12 @@
 
 .scan-input-wrap {
   flex: 1;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   transition: box-shadow 0.15s;
 }
 
 .scan-input-has-error .scan-asset-input {
-  border-color: #ef4444 !important;
+  border-color: var(--color-danger) !important;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
 }
 
@@ -169,8 +169,8 @@
 .scan-asset-input {
   width: 100%;
   height: 42px;
-  border: 1px solid #dce3ed;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 0 14px;
   font-size: 14px;
   font-family: "Courier New", Courier, monospace;
@@ -180,7 +180,7 @@
 }
 
 .scan-asset-input:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
@@ -188,16 +188,16 @@
   height: 42px;
   padding: 0 18px;
   border: none;
-  background: #2563eb;
-  color: white;
-  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.scan-add-btn:hover:not(:disabled) { background: #1d4ed8; }
+.scan-add-btn:hover:not(:disabled) { background: var(--color-primary-dark); }
 .scan-add-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 /* Feedback */
@@ -206,20 +206,20 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   margin-bottom: 12px;
 }
 
 .scan-feedback-error {
   background: #fef2f2;
-  color: #991b1b;
+  color: var(--color-danger-text);
   border: 1px solid #fecaca;
 }
 
 .scan-feedback-success {
   background: #f0fdf4;
-  color: #166534;
+  color: var(--color-success-text);
   border: 1px solid #bbf7d0;
 }
 
@@ -230,20 +230,20 @@
   gap: 4px;
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--color-border-light);
 }
 
 .scan-hint span {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
 }
 
 /* ── Session table card ───────────────────────────────────────────────────── */
 
 .scan-session-card {
-  background: white;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -251,7 +251,7 @@
 
 .scan-session-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1px solid var(--color-border-light);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -261,15 +261,15 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .scan-clear-btn {
   font-size: 12px;
-  color: #ef4444;
+  color: var(--color-danger);
   background: none;
   border: 1px solid #fecaca;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
   cursor: pointer;
 }
@@ -292,7 +292,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--color-text-faint);
 }
 
 .scan-empty span {
@@ -311,31 +311,31 @@
 }
 
 .scan-table th {
-  background: #f8fafc;
+  background: var(--color-surface-light);
   text-align: center;
   padding: 12px 14px;
   font-size: 11px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-body);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .scan-table td {
   padding: 12px 14px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--color-border-light);
   font-size: 13px;
   text-align: center;
-  color: #374151;
+  color: var(--color-text-body);
 }
 
 .scan-row-num {
-  color: #94a3b8 !important;
+  color: var(--color-text-faint) !important;
   font-size: 12px !important;
 }
 
 .scan-asset-id {
-  color: #2563eb !important;
+  color: var(--color-primary) !important;
   font-weight: 700;
   font-family: "Courier New", Courier, monospace;
   font-size: 12px !important;
@@ -343,27 +343,27 @@
 
 .scan-specs {
   font-size: 11px !important;
-  color: #64748b !important;
+  color: var(--color-text-muted) !important;
   max-width: 200px;
 }
 
 .scan-status-pill {
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
 }
 
-.scan-status-ok     { background: #dcfce7; color: #166534; }
-.scan-status-faulty { background: #fee2e2; color: #991b1b; }
+.scan-status-ok     { background: var(--color-success-bg); color: var(--color-success-text); }
+.scan-status-faulty { background: var(--color-danger-bg); color: var(--color-danger-text); }
 
 .scan-remove-btn {
   width: 28px;
   height: 28px;
   border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: white;
-  color: #ef4444;
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-danger);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -384,29 +384,29 @@
 .scan-cancel-btn {
   height: 42px;
   padding: 0 20px;
-  border: 1px solid #dce3ed;
-  background: white;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
   font-size: 14px;
   cursor: pointer;
-  color: #374151;
+  color: var(--color-text-body);
 }
 
-.scan-cancel-btn:hover { background: #f8fafc; }
+.scan-cancel-btn:hover { background: var(--color-surface-light); }
 
 .scan-review-btn {
   height: 42px;
   padding: 0 24px;
   border: none;
-  background: #2563eb;
-  color: white;
-  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.scan-review-btn:hover:not(:disabled) { background: #1d4ed8; }
+.scan-review-btn:hover:not(:disabled) { background: var(--color-primary-dark); }
 .scan-review-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */

@@ -1,7 +1,7 @@
 .sidebar {
   width: 170px;
 
-  background: white;
+  background: var(--color-white);
 
   border-right: 1px solid #eceef2;
 
@@ -73,7 +73,7 @@
 
   letter-spacing: 1.2px;
 
-  color: #2482da;
+  color: var(--color-primary);
 
   white-space: nowrap;
 }
@@ -90,7 +90,7 @@
 
   padding: 0 12px;
 
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 
   text-decoration: none;
 
@@ -112,7 +112,7 @@
 
 .sidebar-item:hover {
   background: #dbf3fe;
-  color: #525aff;
+  color: var(--color-primary);
 }
 
 .sidebar-item:visited {
@@ -124,6 +124,30 @@
 .active-item,
 .active-item:visited {
   background: #dbf3fe;
-  color: #525aff;
+  color: var(--color-primary);
   font-weight: 600;
+}
+
+/* LOGOUT */
+
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 10px var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  color: var(--color-danger);
+  cursor: pointer;
+  text-align: left;
+  margin-top: auto;
+  transition: background 0.15s;
+}
+
+.sidebar-logout-btn:hover {
+  background: var(--color-danger-bg);
 }

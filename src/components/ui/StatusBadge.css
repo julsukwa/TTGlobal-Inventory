@@ -1,0 +1,37 @@
+.ui-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-status-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.ui-status-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.ui-status-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.ui-status-issued {
+  background: var(--color-issued-bg);
+  color: var(--color-issued-text);
+}
+
+/* Fallback for any status value not in the known map */
+.ui-status-neutral {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}

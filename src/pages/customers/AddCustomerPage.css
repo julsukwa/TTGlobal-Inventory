@@ -14,16 +14,16 @@
 
 .page-header p {
   margin-top: 6px;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 14px;
 }
 
 /* CARD */
 
 .form-card {
-  background: white;
+  background: var(--color-white);
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   padding: 24px;
 }
 
@@ -50,13 +50,13 @@
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-body);
 }
 
 .form-group input,
 .form-group textarea {
   border: 1px solid #dbe2ea;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 12px 14px;
 
   font-size: 14px;
@@ -65,7 +65,7 @@
 
 .form-group input:focus,
 .form-group textarea:focus {
-  border-color: #525AFF;
+  border-color: var(--color-primary);
 }
 
 .notes-group {
@@ -89,10 +89,10 @@
 .cancel-btn {
   padding: 12px 20px;
 
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   border: 1px solid #dbe2ea;
 
-  background: white;
+  background: var(--color-white);
 
   cursor: pointer;
 }
@@ -101,10 +101,10 @@
   padding: 12px 20px;
 
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 
-  background: #2563eb;
-  color: white;
+  background: var(--color-primary);
+  color: var(--color-white);
 
   cursor: pointer;
 }

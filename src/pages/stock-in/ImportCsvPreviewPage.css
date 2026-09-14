@@ -5,23 +5,23 @@
 
 .csvprev-breadcrumb {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-bottom: 12px;
 }
 
 /* EMPTY STATE */
 
 .csvprev-empty-state {
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 60px 24px;
   text-align: center;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .csvprev-empty-state svg { color: #f59e0b; margin-bottom: 14px; }
-.csvprev-empty-state h2 { margin: 0 0 8px; font-size: 18px; color: #172b4d; }
+.csvprev-empty-state h2 { margin: 0 0 8px; font-size: 18px; color: var(--color-navy); }
 .csvprev-empty-state p { margin: 0 0 20px; font-size: 13px; }
 
 .csvprev-back-link {
@@ -31,9 +31,9 @@
   height: 38px;
   padding: 0 18px;
   border: 1px solid #dbeafe;
-  background: #fff;
-  color: #2563eb;
-  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -52,22 +52,22 @@
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .csvprev-header p {
   margin-top: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .csvprev-back-btn {
   height: 40px;
   padding: 0 18px;
   border: 1px solid #dbeafe;
-  background: #ffffff;
-  color: #2563eb;
-  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -83,9 +83,9 @@
 /* SUMMARY STRIP */
 
 .csvprev-summary-card {
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 12px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-xl);
   padding: 18px 14px;
   display: grid;
   grid-template-columns: 2.4fr 1fr 1fr 1fr 1fr 1.3fr;
@@ -101,13 +101,13 @@
 }
 
 .csvprev-summary-item:not(:last-child) {
-  border-right: 1px solid #edf2f7;
+  border-right: 1px solid var(--color-border-light);
 }
 
 .cp-icon {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -116,11 +116,11 @@
 
 .cp-icon svg { width: 16px; height: 16px; }
 
-.cp-icon-blue   { background: #eff6ff; color: #2563eb; }
+.cp-icon-blue   { background: #eff6ff; color: var(--color-primary); }
 .cp-icon-purple { background: #f3e8ff; color: #9333ea; }
-.cp-icon-green  { background: #dcfce7; color: #16a34a; }
-.cp-icon-red    { background: #fee2e2; color: #dc2626; }
-.cp-icon-gray   { background: #f1f5f9; color: #64748b; }
+.cp-icon-green  { background: var(--color-success-bg); color: #16a34a; }
+.cp-icon-red    { background: var(--color-danger-bg); color: var(--color-danger-dark); }
+.cp-icon-gray   { background: #f1f5f9; color: var(--color-text-muted); }
 .cp-icon-orange { background: #ffedd5; color: #ea580c; }
 
 .csvprev-summary-item > div:last-child {
@@ -131,7 +131,7 @@
 .csvprev-summary-item span {
   display: block;
   font-size: 10px;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin-bottom: 5px;
   white-space: nowrap;
   overflow: hidden;
@@ -142,7 +142,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -152,7 +152,7 @@
 .csvprev-summary-item p {
   margin-top: 4px;
   font-size: 10.5px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   line-height: 1.4;
   /* Allow captions to wrap onto a second line rather than collide with
      the next card — this was the root cause of the overlapping text. */
@@ -168,7 +168,7 @@
 }
 
 .text-green { color: #16a34a !important; }
-.text-red { color: #dc2626 !important; }
+.text-red { color: var(--color-danger-dark) !important; }
 
 /* BANNERS */
 
@@ -176,7 +176,7 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 16px 18px;
   margin-bottom: 18px;
   font-size: 13px;
@@ -185,20 +185,20 @@
 .banner-success {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
-  color: #166534;
+  color: var(--color-success-text);
   align-items: center;
 }
 
 .banner-error {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  color: #991b1b;
+  color: var(--color-danger-text);
 }
 
 .banner-warning {
   background: #fffbeb;
   border: 1px solid #fde68a;
-  color: #92400e;
+  color: var(--color-warning-text);
 }
 
 .csvprev-banner svg { flex-shrink: 0; margin-top: 1px; }
@@ -225,9 +225,9 @@
   height: 34px;
   padding: 0 14px;
   border: 1px solid #fde68a;
-  background: #fff;
-  color: #92400e;
-  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-warning-text);
+  border-radius: var(--radius-md);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -239,9 +239,9 @@
 /* TABLE CARD */
 
 .csvprev-table-card {
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 20px;
   margin-bottom: 18px;
 }
@@ -258,7 +258,7 @@
 .csvprev-toolbar h2 {
   margin: 0;
   font-size: 15px;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .csvprev-toolbar-right {
@@ -274,9 +274,9 @@
   height: 36px;
   padding: 0 12px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #64748b;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-light);
+  color: var(--color-text-muted);
 }
 
 .csvprev-search input,
@@ -285,7 +285,7 @@
   outline: none;
   background: transparent;
   font-size: 12.5px;
-  color: #172b4d;
+  color: var(--color-navy);
   width: 160px;
 }
 
@@ -295,8 +295,8 @@
 }
 
 .csvprev-table-wrap {
-  border: 1px solid #edf2f7;
-  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
   overflow-x: auto;
 }
 
@@ -310,18 +310,18 @@
 .csvprev-table thead th {
   text-align: center;
   padding: 13px 14px;
-  background: #f8fafc;
-  color: #374151;
+  background: var(--color-surface-light);
+  color: var(--color-text-body);
   font-weight: 600;
   font-size: 11px;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1px solid var(--color-border-light);
   white-space: nowrap;
 }
 
 .csvprev-table tbody td {
   padding: 13px 14px;
   border-bottom: 1px solid #f1f5f9;
-  color: #374151;
+  color: var(--color-text-body);
   text-align: center;
   white-space: nowrap;
 }
@@ -333,7 +333,7 @@
 }
 
 .row-index {
-  color: #94a3b8;
+  color: var(--color-text-faint);
   font-weight: 600;
   font-size: 11px;
 }
@@ -341,22 +341,22 @@
 .category-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: #eff6ff;
-  color: #2563eb;
+  color: var(--color-primary);
   font-size: 11px;
   font-weight: 600;
 }
 
 .specs-cell {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
 .comment-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
 }
@@ -368,29 +368,29 @@
 .condition-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
 }
 
-.condition-new    { background: #dcfce7; color: #15803d; }
-.condition-refurb { background: #fef3c7; color: #92400e; }
-.condition-used   { background: #fee2e2; color: #b91c1c; }
+.condition-new    { background: var(--color-success-bg); color: #15803d; }
+.condition-refurb { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.condition-used   { background: var(--color-danger-bg); color: #b91c1c; }
 
-.qty-cell { font-weight: 700; color: #172b4d; }
+.qty-cell { font-weight: 700; color: var(--color-navy); }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
 }
 
-.status-valid { background: #dcfce7; color: #166534; }
-.status-invalid { background: #fee2e2; color: #991b1b; cursor: help; }
+.status-valid { background: var(--color-success-bg); color: var(--color-success-text); }
+.status-invalid { background: var(--color-danger-bg); color: var(--color-danger-text); cursor: help; }
 
 .status-pill-wrap {
   position: relative;
@@ -406,13 +406,13 @@
   min-width: 220px;
   max-width: 300px;
   background: #1e293b;
-  color: #fff;
-  border-radius: 8px;
+  color: var(--color-white);
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   font-size: 11px;
   line-height: 1.6;
   white-space: normal;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .status-pill-wrap:hover .row-error-tooltip {
@@ -427,13 +427,13 @@
 .csvprev-empty-row {
   text-align: center;
   padding: 30px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
 }
 
 .csvprev-table-footer {
   margin-top: 14px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 /* WHAT HAPPENS NEXT */
@@ -441,7 +441,7 @@
 .csvprev-next-card {
   background: #f8fbff;
   border: 1px solid #dbeafe;
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   padding: 20px;
   margin-bottom: 24px;
 }
@@ -449,7 +449,7 @@
 .csvprev-next-card h2 {
   margin: 0 0 14px;
   font-size: 14px;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .csvprev-next-grid {
@@ -468,8 +468,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #2563eb;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-white);
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -505,9 +505,9 @@
   height: 42px;
   padding: 0 20px;
   border: 1px solid #e2e8f0;
-  background: #fff;
+  background: var(--color-white);
   color: #475569;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   display: flex;
@@ -516,15 +516,15 @@
   cursor: pointer;
 }
 
-.csvprev-reupload-btn:hover { background: #f8fafc; }
+.csvprev-reupload-btn:hover { background: var(--color-surface-light); }
 
 .csvprev-error-report-btn {
   height: 42px;
   padding: 0 18px;
   border: 1px solid #fde68a;
-  background: #fff;
-  color: #92400e;
-  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-warning-text);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   display: flex;
@@ -539,9 +539,9 @@
   height: 42px;
   padding: 0 24px;
   border: none;
-  border-radius: 10px;
-  background: #2563eb;
-  color: #fff;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary);
+  color: var(--color-white);
   font-size: 13px;
   font-weight: 600;
   display: flex;
@@ -552,7 +552,7 @@
   white-space: nowrap;
 }
 
-.csvprev-confirm-btn:hover:not(:disabled) { background: #1d4ed8; }
+.csvprev-confirm-btn:hover:not(:disabled) { background: var(--color-primary-dark); }
 
 .csvprev-confirm-btn:disabled {
   background: #93c5fd;
@@ -577,7 +577,7 @@
 
 @media (max-width: 768px) {
   .csvprev-summary-card { grid-template-columns: 1fr 1fr; row-gap: 18px; }
-  .csvprev-summary-item:nth-child(3n) { border-right: 1px solid #edf2f7; }
+  .csvprev-summary-item:nth-child(3n) { border-right: 1px solid var(--color-border-light); }
   .csvprev-summary-item:nth-child(2n) { border-right: none; }
   .csvprev-header { flex-direction: column; gap: 12px; align-items: flex-start; }
   .csvprev-footer { flex-direction: column; align-items: stretch; }

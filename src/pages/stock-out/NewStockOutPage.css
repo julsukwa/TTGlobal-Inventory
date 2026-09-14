@@ -5,7 +5,7 @@
 
 .nso-breadcrumb {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-bottom: 12px;
 }
 
@@ -23,22 +23,22 @@
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .nso-header p {
   margin-top: 6px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .nso-back-btn {
   height: 40px;
   padding: 0 16px;
   border: 1px solid #dbeafe;
-  background: white;
-  color: #2563eb;
-  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -62,9 +62,9 @@
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 
 .nso-card {
-  background: white;
-  border: 1px solid #e8edf5;
-  border-radius: 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
   padding: 24px;
 }
 
@@ -73,14 +73,14 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 6px;
-  color: #2563eb;
+  color: var(--color-primary);
 }
 
 .nso-card-header h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .nso-card-icon {
@@ -90,7 +90,7 @@
 .nso-card-desc {
   margin: 0 0 20px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 /* ── Label / field ────────────────────────────────────────────────────────── */
@@ -99,17 +99,17 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-body);
   margin-bottom: 6px;
 }
 
-.nso-required { color: #ef4444; margin-left: 2px; }
-.nso-optional { color: #94a3b8; font-weight: 400; }
+.nso-required { color: var(--color-danger); margin-left: 2px; }
+.nso-optional { color: var(--color-text-faint); font-weight: 400; }
 
 .nso-error-msg {
   display: block;
   font-size: 11px;
-  color: #ef4444;
+  color: var(--color-danger);
   margin-top: 4px;
 }
 
@@ -147,8 +147,8 @@
 .nso-search-input-wrap input {
   width: 100%;
   height: 42px;
-  border: 1px solid #dce3ed;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 0 36px;
   font-size: 14px;
   outline: none;
@@ -156,12 +156,12 @@
 }
 
 .nso-search-input-wrap input:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
 .nso-input-error {
-  border-color: #ef4444 !important;
+  border-color: var(--color-danger) !important;
 }
 
 /* Customer dropdown */
@@ -170,10 +170,10 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: white;
+  background: var(--color-white);
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   z-index: 50;
   max-height: 220px;
   overflow-y: auto;
@@ -192,19 +192,19 @@
 .nso-dropdown-name {
   font-size: 14px;
   font-weight: 600;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 .nso-dropdown-meta {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   margin-top: 2px;
 }
 
 .nso-dropdown-empty {
   padding: 16px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--color-text-faint);
   font-size: 13px;
 }
 
@@ -212,7 +212,7 @@
 .nso-customer-details {
   background: #f5f9ff;
   border: 1px solid #dbeafe;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   margin-top: 12px;
 }
@@ -226,7 +226,7 @@
 .nso-detail-row > div span {
   display: block;
   font-size: 11px;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin-bottom: 3px;
 }
 
@@ -234,7 +234,7 @@
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #172b4d;
+  color: var(--color-navy);
 }
 
 /* ── Form grid ────────────────────────────────────────────────────────────── */
@@ -256,8 +256,8 @@
 
 .nso-text-input {
   height: 42px;
-  border: 1px solid #dce3ed;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 0 14px;
   font-size: 14px;
   outline: none;
@@ -265,19 +265,19 @@
 }
 
 .nso-text-input:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
 .nso-input-disabled {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: var(--color-surface-light);
+  color: var(--color-text-faint);
   cursor: not-allowed;
 }
 
 .nso-textarea {
-  border: 1px solid #dce3ed;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 10px 14px;
   font-size: 14px;
   outline: none;
@@ -287,7 +287,7 @@
 }
 
 .nso-textarea:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
@@ -302,29 +302,29 @@
 .nso-cancel-btn {
   height: 42px;
   padding: 0 20px;
-  border: 1px solid #dce3ed;
-  background: white;
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
   font-size: 14px;
   cursor: pointer;
-  color: #374151;
+  color: var(--color-text-body);
 }
 
-.nso-cancel-btn:hover { background: #f8fafc; }
+.nso-cancel-btn:hover { background: var(--color-surface-light); }
 
 .nso-proceed-btn {
   height: 42px;
   padding: 0 24px;
   border: none;
-  background: #2563eb;
-  color: white;
-  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.nso-proceed-btn:hover { background: #1d4ed8; }
+.nso-proceed-btn:hover { background: var(--color-primary-dark); }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
