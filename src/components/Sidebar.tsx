@@ -112,10 +112,16 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
 
             {canSee("adjustments") && (
-              <div className="sidebar-item">
+              <NavLink
+                to="/adjustments"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
                 <Settings size={16} />
                 <span>Adjustments</span>
-              </div>
+              </NavLink>
             )}
 
             {canSee("database") && (

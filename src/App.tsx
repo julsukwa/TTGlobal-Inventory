@@ -8,6 +8,8 @@ import AddCustomerPage from "./pages/customers/AddCustomerPage";
 import StaffPage from "./pages/staff/StaffPage";
 import DropdownPage from "./pages/dropdowns/DropdownPage";
 import ShipmentPage from "./pages/shipments/ShipmentPage";
+import AdjustmentsPage from "./pages/adjustments/AdjustmentsPage";
+import NewAdjustmentPage from "./pages/adjustments/NewAdjustmentPage";
 import StockInPage from "./pages/stock-in/StockInPage";
 import ImportInventoryPage from "./pages/stock-in/ImportInventoryPage";
 import ManualStockInPage from "./pages/stock-in/ManualStockInPage";
@@ -39,6 +41,8 @@ function App() {
           <Route path="/staff"           element={<StaffPage />} />
           <Route path="/dropdowns"       element={<DropdownPage />} />
           <Route path="/shipments"       element={<ShipmentPage />} />
+          <Route path="/adjustments"     element={<AdjustmentsPage />} />
+          <Route path="/adjustments/new" element={<NewAdjustmentPage />} />
 
           {/* Stock-In flow */}
           <Route path="/stock-in"                               element={<StockInPage />} />
