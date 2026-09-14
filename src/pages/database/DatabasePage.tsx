@@ -1,0 +1,856 @@
+// ─── Database Page ────────────────────────────────────────────────────────────
+//
+// The system-wide, cross-shipment inventory repository — every asset ever
+// imported, in one searchable/filterable table. This is the same underlying
+// data ViewImportedInventoryPage shows scoped to a single shipment; here it's
+// unscoped, with a universal search bar plus six independent filters.
+//
+// The Asset Information drawer follows the exact view/edit toggle pattern
+// used on ViewImportedInventoryPage: Asset ID / ID Source / Batch ID /
+// Shipment ID / Vendor ID / List Number / Import Date / Imported By are
+// protected (shown, never editable) since they preserve traceability back to
+// the import session; only the physical-spec fields and notes can change.
+//
+// BACKEND INTEGRATION SEAM: see databaseTypes.ts for the planned endpoints.
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Download,
+  Eye,
+  MoreVertical,
+  X,
+  Pencil,
+  Printer,
+  RotateCcw,
+  Package,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpFromLine,
+} from "lucide-react";
+
+import "./DatabasePage.css";
+import { mockDatabase } from "./mockDatabase";
+import type { InventoryAsset } from "./databaseTypes";
+
+import { StatusBadge, SearchBar, Pagination, Button, Modal } from "../../components/ui";
+
+const ITEMS_PER_PAGE = 10;
+
+function buildSpecs(item: InventoryAsset): string {
+  return (
+    [item.processor, item.generation, item.ram, item.storage, item.speed]
+      .filter(Boolean)
+      .join(" • ") || "—"
+  );
+}
+
+export default function DatabasePage() {
+  const [inventory, setInventory] = useState<InventoryAsset[]>(mockDatabase);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [brandFilter, setBrandFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [vendorFilter, setVendorFilter] = useState("All");
+  const [shipmentFilter, setShipmentFilter] = useState("All");
+  const [idSourceFilter, setIdSourceFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [selectedAsset, setSelectedAsset] = useState<InventoryAsset | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<InventoryAsset | null>(null);
+
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const openMenuRef = useRef<HTMLDivElement>(null);
+  const [restoreTarget, setRestoreTarget] = useState<InventoryAsset | null>(null);
+
+  // Close the open three-dot menu on any click outside it — same pattern
+  // used on StaffPage.
+  useEffect(() => {
+    if (openMenuId === null) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openMenuRef.current && !openMenuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openMenuId]);
+
+  // ── Filter option lists ──────────────────────────────────────────────────
+
+  const categories = useMemo(
+    () => [...new Set(inventory.map((i) => i.category))].sort(),
+    [inventory]
+  );
+  const brands = useMemo(() => [...new Set(inventory.map((i) => i.brand))].sort(), [inventory]);
+  const vendors = useMemo(
+    () => [...new Set(inventory.map((i) => i.vendorId))].sort(),
+    [inventory]
+  );
+  const shipments = useMemo(
+    () => [...new Set(inventory.map((i) => i.shipmentId))].sort(),
+    [inventory]
+  );
+
+  // ── Summary figures ──────────────────────────────────────────────────────
+
+  const okCount = inventory.filter((i) => i.status === "Ok").length;
+  const faultyCount = inventory.filter((i) => i.status === "Faulty").length;
+  const issuedCount = inventory.filter((i) => i.status === "Issued").length;
+
+  // ── Filtering / pagination ───────────────────────────────────────────────
+
+  const filteredAssets = inventory.filter((item) => {
+    const search = searchTerm.toLowerCase();
+    const matchesSearch =
+      !search ||
+      item.assetId.toLowerCase().includes(search) ||
+      item.model.toLowerCase().includes(search) ||
+      item.batchId.toLowerCase().includes(search) ||
+      item.listNumber.toLowerCase().includes(search);
+
+    const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
+    const matchesBrand = brandFilter === "All" || item.brand === brandFilter;
+    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
+    const matchesVendor = vendorFilter === "All" || item.vendorId === vendorFilter;
+    const matchesShipment = shipmentFilter === "All" || item.shipmentId === shipmentFilter;
+    const matchesIdSource =
+      idSourceFilter === "All" ||
+      (idSourceFilter === "Generated" && item.assetIdSource === "generated") ||
+      (idSourceFilter === "Provided" && item.assetIdSource === "provided");
+
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesBrand &&
+      matchesStatus &&
+      matchesVendor &&
+      matchesShipment &&
+      matchesIdSource
+    );
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedAssets = filteredAssets.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter("All");
+    setBrandFilter("All");
+    setStatusFilter("All");
+    setVendorFilter("All");
+    setShipmentFilter("All");
+    setIdSourceFilter("All");
+    setCurrentPage(1);
+  };
+
+  // ── Drawer ────────────────────────────────────────────────────────────────
+
+  const handleViewDetails = (item: InventoryAsset) => {
+    setSelectedAsset(item);
+    setIsEditing(false);
+    setEditForm(null);
+    setOpenMenuId(null);
+  };
+
+  const handleEditFromMenu = (item: InventoryAsset) => {
+    setSelectedAsset(item);
+    setEditForm({ ...item });
+    setIsEditing(true);
+    setOpenMenuId(null);
+  };
+
+  const handleCloseDrawer = () => {
+    setSelectedAsset(null);
+    setIsEditing(false);
+    setEditForm(null);
+  };
+
+  const handleStartEdit = () => {
+    if (!selectedAsset) return;
+    setEditForm({ ...selectedAsset });
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditForm(null);
+  };
+
+  const handleEditFieldChange = (field: keyof InventoryAsset, value: string) => {
+    if (!editForm) return;
+    setEditForm({ ...editForm, [field]: value });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editForm) return;
+    setInventory((prev) => prev.map((i) => (i.assetId === editForm.assetId ? editForm : i)));
+    setSelectedAsset(editForm);
+    setIsEditing(false);
+    setEditForm(null);
+  };
+
+  // Placeholder — sticker printing isn't built yet (separate feature).
+  const handlePrintSticker = () => {};
+
+  // ── Restore to Ok ─────────────────────────────────────────────────────────
+
+  const handleConfirmRestore = () => {
+    if (!restoreTarget) return;
+    const restored: InventoryAsset = { ...restoreTarget, status: "Ok", faultTypes: [] };
+
+    setInventory((prev) => prev.map((i) => (i.assetId === restored.assetId ? restored : i)));
+
+    if (selectedAsset?.assetId === restored.assetId) {
+      setSelectedAsset(restored);
+    }
+
+    setRestoreTarget(null);
+  };
+
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  const handleExportCsv = () => {
+    const header =
+      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Screen Type,Status,Imported By,Import Date,Fault Types,Notes";
+    const lines = filteredAssets.map((item) => {
+      const cells = [
+        item.assetId,
+        item.assetIdSource,
+        item.listNumber,
+        item.batchId,
+        item.shipmentId,
+        item.vendorId,
+        item.category,
+        item.brand,
+        item.model,
+        item.processor,
+        item.generation,
+        item.ram,
+        item.storage,
+        item.speed,
+        item.screenType,
+        item.status,
+        item.importedBy,
+        item.importDate,
+        item.faultTypes.join(" | "),
+        item.notes,
+      ];
+      return cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",");
+    });
+    const csvContent = [header, ...lines].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "inventory_database.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // No PDF library is part of this project yet, so this uses the browser's
+  // native print dialog — every browser offers "Save as PDF" there, which
+  // gets a real PDF out without adding a new dependency for one button.
+  const handleExportPdf = () => window.print();
+
+  return (
+    <div className="db-page">
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <div className="db-header">
+        <div>
+          <h1>Database</h1>
+          <p>View, search and manage all inventory records in the system.</p>
+        </div>
+        <div className="db-header-actions">
+          <Button variant="secondary" onClick={handleExportCsv}>
+            <Download size={16} />
+            Export CSV
+          </Button>
+          <Button variant="secondary" onClick={handleExportPdf}>
+            <Download size={16} />
+            Export PDF
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Summary strip ─────────────────────────────────────────────────── */}
+      <div className="db-summary-strip">
+        <div className="db-summary-item">
+          <div className="db-summary-icon db-icon-blue">
+            <Package size={16} />
+          </div>
+          <div>
+            <span>Total Inventory</span>
+            <h3>{inventory.length}</h3>
+          </div>
+        </div>
+
+        <div className="db-summary-item">
+          <div className="db-summary-icon db-icon-green">
+            <CheckCircle2 size={16} />
+          </div>
+          <div>
+            <span>Available (Ok)</span>
+            <h3>{okCount}</h3>
+          </div>
+        </div>
+
+        <div className="db-summary-item">
+          <div className="db-summary-icon db-icon-red">
+            <AlertTriangle size={16} />
+          </div>
+          <div>
+            <span>Faulty</span>
+            <h3>{faultyCount}</h3>
+          </div>
+        </div>
+
+        <div className="db-summary-item">
+          <div className="db-summary-icon db-icon-indigo">
+            <ArrowUpFromLine size={16} />
+          </div>
+          <div>
+            <span>Issued</span>
+            <h3>{issuedCount}</h3>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Universal search ─────────────────────────────────────────────── */}
+      <div className="db-universal-search">
+        <SearchBar
+          value={searchTerm}
+          onChange={(value) => {
+            setSearchTerm(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Search by Asset ID, Model, Batch ID or List Number..."
+        />
+      </div>
+
+      {/* ── Advanced filters ─────────────────────────────────────────────── */}
+      <div className="db-filters-card">
+        <select
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All Categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={brandFilter}
+          onChange={(e) => {
+            setBrandFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All Brands</option>
+          {brands.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All Statuses</option>
+          <option value="Ok">Ok</option>
+          <option value="Faulty">Faulty</option>
+          <option value="Issued">Issued</option>
+        </select>
+
+        <select
+          value={vendorFilter}
+          onChange={(e) => {
+            setVendorFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All Vendors</option>
+          {vendors.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={shipmentFilter}
+          onChange={(e) => {
+            setShipmentFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All Shipments</option>
+          {shipments.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={idSourceFilter}
+          onChange={(e) => {
+            setIdSourceFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All">All ID Sources</option>
+          <option value="Generated">Generated</option>
+          <option value="Provided">Provided</option>
+        </select>
+
+        <button className="db-clear-filters-btn" onClick={handleClearFilters}>
+          Clear Filters
+        </button>
+      </div>
+
+      {/* ── Results count ─────────────────────────────────────────────────── */}
+      <p className="db-results-count">
+        Showing {filteredAssets.length} of {inventory.length} results
+      </p>
+
+      {/* ── Table ─────────────────────────────────────────────────────────── */}
+      <div className="db-table-card">
+        <div className="db-table-wrap">
+          <table className="db-table">
+            <thead>
+              <tr>
+                <th>Asset ID</th>
+                <th>ID Source</th>
+                <th>List Number</th>
+                <th>Batch ID</th>
+                <th>Category</th>
+                <th>Brand</th>
+                <th>Model</th>
+                <th>Specs</th>
+                <th>Status</th>
+                <th>Import Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedAssets.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="db-empty-row">
+                    No inventory records match your search/filters.
+                  </td>
+                </tr>
+              ) : (
+                paginatedAssets.map((item) => (
+                  <tr key={item.assetId}>
+                    <td>
+                      <span className="db-asset-id-cell">
+                        <span className="db-asset-id">{item.assetId}</span>
+                        <span
+                          className={`db-letter-badge ${
+                            item.assetIdSource === "provided"
+                              ? "db-letter-badge-grey"
+                              : "db-letter-badge-blue"
+                          }`}
+                          title={item.assetIdSource === "provided" ? "Provided" : "Generated"}
+                        >
+                          {item.assetIdSource === "provided" ? "P" : "G"}
+                        </span>
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`db-source-pill ${
+                          item.assetIdSource === "provided"
+                            ? "db-source-provided"
+                            : "db-source-generated"
+                        }`}
+                      >
+                        {item.assetIdSource === "provided" ? "Provided" : "Generated"}
+                      </span>
+                    </td>
+                    <td>{item.listNumber}</td>
+                    <td className="db-batch-id">{item.batchId}</td>
+                    <td>{item.category}</td>
+                    <td>{item.brand}</td>
+                    <td>{item.model}</td>
+                    <td className="db-specs-cell">{buildSpecs(item)}</td>
+                    <td>
+                      <StatusBadge status={item.status} />
+                    </td>
+                    <td className="db-muted-cell">{item.importDate}</td>
+                    <td>
+                      <div className="db-actions">
+                        <button
+                          className="db-action-btn"
+                          title="View details"
+                          onClick={() => handleViewDetails(item)}
+                        >
+                          <Eye size={14} />
+                        </button>
+
+                        <div
+                          className="db-menu-wrapper"
+                          ref={openMenuId === item.assetId ? openMenuRef : undefined}
+                        >
+                          <button
+                            className="db-action-btn"
+                            title="More actions"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === item.assetId ? null : item.assetId)
+                            }
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+
+                          {openMenuId === item.assetId && (
+                            <div className="db-row-menu">
+                              <button onClick={() => handleEditFromMenu(item)}>
+                                <Pencil size={13} />
+                                Edit Details
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handlePrintSticker();
+                                  setOpenMenuId(null);
+                                }}
+                              >
+                                <Printer size={13} />
+                                Print Sticker
+                              </button>
+                              {item.status === "Faulty" && (
+                                <button
+                                  className="db-menu-restore"
+                                  onClick={() => {
+                                    setRestoreTarget(item);
+                                    setOpenMenuId(null);
+                                  }}
+                                >
+                                  <RotateCcw size={13} />
+                                  Restore to Ok
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="db-footer">
+          <span>
+            Showing {filteredAssets.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredAssets.length)} of{" "}
+            {filteredAssets.length} entries
+          </span>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      </div>
+
+      {/* ── Asset Information drawer ─────────────────────────────────────── */}
+      {selectedAsset && (
+        <div className="db-drawer-overlay" onClick={handleCloseDrawer}>
+          <div className="db-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="db-drawer-header">
+              <div>
+                <h2>{selectedAsset.assetId}</h2>
+                <p>Asset Information</p>
+              </div>
+              <button className="db-drawer-close" onClick={handleCloseDrawer}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="db-drawer-body">
+              {/* Asset overview */}
+              <div className="db-drawer-section">
+                <h4>Asset Overview</h4>
+                <div className="db-drawer-grid">
+                  <div>
+                    <span>Asset ID</span>
+                    <p className="db-drawer-mono">{selectedAsset.assetId}</p>
+                  </div>
+                  <div>
+                    <span>ID Source</span>
+                    <span
+                      className={`db-source-pill ${
+                        selectedAsset.assetIdSource === "provided"
+                          ? "db-source-provided"
+                          : "db-source-generated"
+                      }`}
+                    >
+                      {selectedAsset.assetIdSource === "provided" ? "Provided" : "Generated"}
+                    </span>
+                  </div>
+                  <div>
+                    <span>Status</span>
+                    <StatusBadge status={selectedAsset.status} />
+                  </div>
+                  <div>
+                    <span>List Number</span>
+                    <p>{selectedAsset.listNumber}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical specifications */}
+              <div className="db-drawer-section">
+                <h4>Technical Specifications</h4>
+
+                {!isEditing ? (
+                  <div className="db-drawer-grid">
+                    <div>
+                      <span>Category</span>
+                      <p>{selectedAsset.category}</p>
+                    </div>
+                    <div>
+                      <span>Brand</span>
+                      <p>{selectedAsset.brand}</p>
+                    </div>
+                    <div>
+                      <span>Model</span>
+                      <p>{selectedAsset.model}</p>
+                    </div>
+                    <div>
+                      <span>Processor</span>
+                      <p>{selectedAsset.processor || "—"}</p>
+                    </div>
+                    <div>
+                      <span>Generation</span>
+                      <p>{selectedAsset.generation || "—"}</p>
+                    </div>
+                    <div>
+                      <span>RAM</span>
+                      <p>{selectedAsset.ram || "—"}</p>
+                    </div>
+                    <div>
+                      <span>Storage</span>
+                      <p>{selectedAsset.storage || "—"}</p>
+                    </div>
+                    <div>
+                      <span>Speed</span>
+                      <p>{selectedAsset.speed || "—"}</p>
+                    </div>
+                    <div>
+                      <span>Screen Type</span>
+                      <p>{selectedAsset.screenType || "—"}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="db-edit-grid">
+                    <label>
+                      Brand
+                      <input
+                        value={editForm?.brand ?? ""}
+                        onChange={(e) => handleEditFieldChange("brand", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Model
+                      <input
+                        value={editForm?.model ?? ""}
+                        onChange={(e) => handleEditFieldChange("model", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Processor
+                      <input
+                        value={editForm?.processor ?? ""}
+                        onChange={(e) => handleEditFieldChange("processor", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Generation
+                      <input
+                        value={editForm?.generation ?? ""}
+                        onChange={(e) => handleEditFieldChange("generation", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      RAM
+                      <input
+                        value={editForm?.ram ?? ""}
+                        onChange={(e) => handleEditFieldChange("ram", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Storage
+                      <input
+                        value={editForm?.storage ?? ""}
+                        onChange={(e) => handleEditFieldChange("storage", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Speed
+                      <input
+                        value={editForm?.speed ?? ""}
+                        onChange={(e) => handleEditFieldChange("speed", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Screen Type
+                      <select
+                        value={editForm?.screenType ?? ""}
+                        onChange={(e) => handleEditFieldChange("screenType", e.target.value)}
+                      >
+                        <option value="">Select screen type</option>
+                        <option value="Touch Screen">Touch Screen</option>
+                        <option value="Non-Touch">Non-Touch</option>
+                      </select>
+                    </label>
+                    <label className="db-edit-full-col">
+                      Notes
+                      <textarea
+                        value={editForm?.notes ?? ""}
+                        onChange={(e) => handleEditFieldChange("notes", e.target.value)}
+                        rows={2}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Import information */}
+              <div className="db-drawer-section">
+                <h4>Import Information</h4>
+                <div className="db-drawer-grid">
+                  <div>
+                    <span>Shipment ID</span>
+                    <p>{selectedAsset.shipmentId}</p>
+                  </div>
+                  <div>
+                    <span>Vendor ID</span>
+                    <p>{selectedAsset.vendorId}</p>
+                  </div>
+                  <div>
+                    <span>Batch ID</span>
+                    <p className="db-drawer-mono">{selectedAsset.batchId}</p>
+                  </div>
+                  <div>
+                    <span>Imported By</span>
+                    <p>{selectedAsset.importedBy}</p>
+                  </div>
+                  <div>
+                    <span>Import Date</span>
+                    <p>{selectedAsset.importDate}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fault information — Faulty items only */}
+              {selectedAsset.status === "Faulty" && !isEditing && (
+                <div className="db-drawer-section">
+                  <h4>Fault Information</h4>
+                  <div className="db-fault-pills">
+                    {selectedAsset.faultTypes.map((fault) => (
+                      <span key={fault} className="db-fault-pill">
+                        {fault}
+                      </span>
+                    ))}
+                  </div>
+                  {selectedAsset.notes && <p className="db-drawer-notes">{selectedAsset.notes}</p>}
+                </div>
+              )}
+
+              {/* Identification */}
+              {!isEditing && (
+                <div className="db-drawer-section">
+                  <h4>Identification</h4>
+                  <div className="db-drawer-grid">
+                    <div>
+                      <span>Asset ID</span>
+                      <p className="db-drawer-mono">{selectedAsset.assetId}</p>
+                    </div>
+                    <div>
+                      <span>Batch ID</span>
+                      <p className="db-drawer-mono">{selectedAsset.batchId}</p>
+                    </div>
+                    <div>
+                      <span>List Number</span>
+                      <p>{selectedAsset.listNumber}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="db-drawer-footer">
+              {!isEditing ? (
+                <>
+                  <Button variant="secondary" onClick={handlePrintSticker}>
+                    <Printer size={14} />
+                    Print Sticker
+                  </Button>
+                  <Button variant="primary" onClick={handleStartEdit}>
+                    <Pencil size={14} />
+                    Edit Details
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={handleSaveEdit}>
+                    Save Changes
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Restore to Ok confirmation ────────────────────────────────────── */}
+      <Modal
+        isOpen={restoreTarget !== null}
+        onClose={() => setRestoreTarget(null)}
+        title="Restore Item to Ok"
+        width={420}
+      >
+        {restoreTarget && (
+          <>
+            <p>
+              Are you sure you want to restore <strong>{restoreTarget.assetId}</strong> to Ok
+              status? The fault record will be cleared.
+            </p>
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setRestoreTarget(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleConfirmRestore}>
+                Confirm Restore
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
+    </div>
+  );
+}

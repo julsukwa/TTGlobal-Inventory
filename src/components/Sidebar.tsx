@@ -125,10 +125,16 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
             )}
 
             {canSee("database") && (
-              <div className="sidebar-item">
+              <NavLink
+                to="/database"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
                 <Database size={16} />
                 <span>Database</span>
-              </div>
+              </NavLink>
             )}
 
             {canSee("dropdowns") && (
