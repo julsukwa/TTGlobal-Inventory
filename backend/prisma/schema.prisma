@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Staff / Users ─────────────────────────────────────────────────────────────
+model User {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  username    String   @unique
+  password    String   // bcrypt hashed
+  role        Role     @default(STAFF_SALES)
+  email       String?  @default("")
+  status      Status   @default(ACTIVE)
+  lastLogin   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  stockOuts       StockOutTransaction[]
+  adjustments     Adjustment[]
+  stockInBatches  StockInBatch[]
+  warrantyReturns WarrantyReturn[]
+}
+
+enum Role {
+  ADMIN
+  STAFF_SALES
+  STAFF_WAREHOUSE
+  STAFF_WARRANTY
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+// ── Vendors & Dropdowns ───────────────────────────────────────────────────────
+model Vendor {
+  id          Int        @id @default(autoincrement())
+  vendorId    String     @unique // e.g. TTL, MWS
+  name        String
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  shipments   Shipment[]
+}
+
+model DropdownValue {
+  id          Int      @id @default(autoincrement())
+  category    String   // e.g. ItemType, Brand, Fault, RAM, Storage, Processor, Condition, Generation
+  value       String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([category, value])
+}
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+model Customer {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  email       String
+  phone       String
+  location    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockOuts   StockOutTransaction[]
+}
+
+// ── Shipments ─────────────────────────────────────────────────────────────────
+model Shipment {
+  id                   Int       @id @default(autoincrement())
+  shipmentId           String    @unique // e.g. CNT1, ASH1
+  shipmentName         String
+  vendorId             Int
+  vendor               Vendor    @relation(fields: [vendorId], references: [id])
+  itemsSent            Int
+  shipmentReceivedDate DateTime
+  remarks              String?   @default("")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  inventory    InventoryItem[]
+  stockInBatches StockInBatch[]
+}
+
+// ── Stock In Batch ────────────────────────────────────────────────────────────
+model StockInBatch {
+  id           Int      @id @default(autoincrement())
+  batchId      String   @unique // ShipmentID-VendorID-YY-NNNN
+  shipmentId   Int
+  shipment     Shipment @relation(fields: [shipmentId], references: [id])
+  importedById Int
+  importedBy   User     @relation(fields: [importedById], references: [id])
+  uploadType   String   // manual | csv-summary | csv-detailed
+  itemsCreated Int
+  createdAt    DateTime @default(now())
+
+  inventory    InventoryItem[]
+}
+
+// ── Inventory ─────────────────────────────────────────────────────────────────
+model InventoryItem {
+  id             Int          @id @default(autoincrement())
+  assetId        String       @unique // ListNumber-YY-NNNN or provided ID
+  assetIdSource  AssetIdSource @default(GENERATED)
+  listNumber     String
+  batchId        Int
+  batch          StockInBatch @relation(fields: [batchId], references: [id])
+  shipmentId     Int
+  shipment       Shipment     @relation(fields: [shipmentId], references: [id])
+  category       String
+  condition      String       @default("")
+  brand          String
+  model          String
+  processor      String       @default("")
+  generation     String       @default("")
+  ram            String       @default("")
+  storage        String       @default("")
+  speed          String       @default("")
+  screenType     String       @default("")
+  notes          String       @default("")
+  status         ItemStatus   @default(OK)
+  importedAt     DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  adjustments     Adjustment[]
+  stockOutItems   StockOutItem[]
+  warrantyReturns WarrantyReturn[]
+}
+
+enum AssetIdSource {
+  GENERATED
+  PROVIDED
+}
+
+enum ItemStatus {
+  OK
+  FAULTY
+  ISSUED
+}
+
+// ── Adjustments (marking items as Faulty) ────────────────────────────────────
+model Adjustment {
+  id             Int           @id @default(autoincrement())
+  inventoryId    Int
+  inventory      InventoryItem @relation(fields: [inventoryId], references: [id])
+  adjustedById   Int
+  adjustedBy     User          @relation(fields: [adjustedById], references: [id])
+  faultTypes     String[]      // array of fault type strings
+  fromStatus     ItemStatus
+  toStatus       ItemStatus
+  notes          String        @default("")
+  createdAt      DateTime      @default(now())
+}
+
+// ── Stock Out ─────────────────────────────────────────────────────────────────
+model StockOutTransaction {
+  id             Int          @id @default(autoincrement())
+  invoiceNumber  String       @unique
+  customerId     Int
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  processedById  Int
+  processedBy    User         @relation(fields: [processedById], references: [id])
+  notes          String       @default("")
+  createdAt      DateTime     @default(now())
+
+  items          StockOutItem[]
+}
+
+model StockOutItem {
+  id              Int                 @id @default(autoincrement())
+  transactionId   Int
+  transaction     StockOutTransaction @relation(fields: [transactionId], references: [id])
+  inventoryId     Int
+  inventory       InventoryItem       @relation(fields: [inventoryId], references: [id])
+  priorStatus     ItemStatus          // Ok or Faulty before issuing
+  source          String              // scan | list-number | batch
+  createdAt       DateTime            @default(now())
+}
+
+// ── Warranty Returns ──────────────────────────────────────────────────────────
+model WarrantyReturn {
+  id              Int           @id @default(autoincrement())
+  wrtAssetId      String        @unique // WRT-YY-NNNN
+  originalAssetId String        // the original asset that was sold
+  customerId      Int?
+  processedById   Int
+  processedBy     User          @relation(fields: [processedById], references: [id])
+  condition       ItemStatus    // OK or FAULTY after inspection
+  inventoryId     Int?          // links to new InventoryItem created for this return
+  inventory       InventoryItem? @relation(fields: [inventoryId], references: [id])
+  notes           String        @default("")
+  createdAt       DateTime      @default(now())
+}
