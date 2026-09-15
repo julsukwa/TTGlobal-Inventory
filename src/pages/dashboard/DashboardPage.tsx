@@ -37,17 +37,17 @@ import { useAuth } from "../../context/AuthContext";
 import type { UserRole } from "../../utils/permissions";
 
 const SUBTITLE_BY_ROLE: Record<UserRole, string> = {
-  admin: "Welcome back. Here is what is happening with your inventory today.",
-  sales: "Here is your sales activity overview.",
-  warehouse: "Here is your warehouse operations overview.",
-  warranty: "Here is your warranty returns overview.",
+  ADMIN: "Welcome back. Here is what is happening with your inventory today.",
+  STAFF_SALES: "Here is your sales activity overview.",
+  STAFF_WAREHOUSE: "Here is your warehouse operations overview.",
+  STAFF_WARRANTY: "Here is your warranty returns overview.",
 };
 
 const KPIS_BY_ROLE: Record<UserRole, DashboardKPI[]> = {
-  admin: adminKPIs,
-  sales: salesKPIs,
-  warehouse: warehouseKPIs,
-  warranty: warrantyKPIs,
+  ADMIN: adminKPIs,
+  STAFF_SALES: salesKPIs,
+  STAFF_WAREHOUSE: warehouseKPIs,
+  STAFF_WARRANTY: warrantyKPIs,
 };
 
 const ACTIVITY_ICON: Record<RecentActivity["type"], { Icon: LucideIcon; colorClass: string }> = {
@@ -106,8 +106,8 @@ export default function DashboardPage() {
 
   const role = user.role;
   const kpis = KPIS_BY_ROLE[role];
-  const showAdminSections = role === "admin";
-  const showRecentActivities = role === "admin" || role === "warehouse";
+  const showAdminSections = role === "ADMIN";
+  const showRecentActivities = role === "ADMIN" || role === "STAFF_WAREHOUSE";
 
   return (
     <div className="dash-page">
@@ -121,7 +121,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI cards ─────────────────────────────────────────────────────── */}
-      <div className={`dash-kpi-grid ${role === "admin" ? "dash-kpi-grid-5" : "dash-kpi-grid-3"}`}>
+      <div className={`dash-kpi-grid ${role === "ADMIN" ? "dash-kpi-grid-5" : "dash-kpi-grid-3"}`}>
         {kpis.map((kpi) => (
           <div className="dash-kpi-card" key={kpi.label}>
             <span className="dash-kpi-label">{kpi.label}</span>
@@ -215,7 +215,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Sales-only: quick actions ───────────────────────────────────────── */}
-      {role === "sales" && (
+      {role === "STAFF_SALES" && (
         <div className="dash-panel">
           <h3>Quick Actions</h3>
           <div className="dash-quick-actions">
@@ -230,7 +230,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Warehouse-only: quick actions ───────────────────────────────────── */}
-      {role === "warehouse" && (
+      {role === "STAFF_WAREHOUSE" && (
         <div className="dash-panel">
           <h3>Quick Actions</h3>
           <div className="dash-quick-actions">
@@ -245,7 +245,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Warranty-only: quick actions ────────────────────────────────────── */}
-      {role === "warranty" && (
+      {role === "STAFF_WARRANTY" && (
         <div className="dash-panel">
           <h3>Quick Actions</h3>
           <div className="dash-quick-actions">

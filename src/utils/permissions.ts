@@ -5,7 +5,7 @@
 // check this rather than hardcoding role checks — see Sidebar.tsx for the
 // current consumer.
 
-export type UserRole = "admin" | "sales" | "warehouse" | "warranty";
+export type UserRole = "ADMIN" | "STAFF_SALES" | "STAFF_WAREHOUSE" | "STAFF_WARRANTY";
 
 export interface RoutePermission {
   canView: UserRole[];
@@ -13,17 +13,17 @@ export interface RoutePermission {
 }
 
 export const PERMISSIONS: Record<string, RoutePermission> = {
-  dashboard:      { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin'] },
-  staff:          { canView: ['admin'],                                canEdit: ['admin'] },
-  customers:      { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin','sales'] },
-  dropdowns:      { canView: ['admin'],                                canEdit: ['admin'] },
-  shipments:      { canView: ['admin','sales','warehouse'],            canEdit: ['admin'] },
-  stockIn:        { canView: ['admin','warehouse'],                    canEdit: ['admin'] },
-  stockOut:       { canView: ['admin','sales'],                        canEdit: ['admin','sales'] },
-  adjustments:    { canView: ['admin','warehouse'],                    canEdit: ['admin','warehouse'] },
-  database:       { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin'] },
-  faultyStock:    { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin','warehouse'] },
-  warranty:       { canView: ['admin','sales','warehouse','warranty'], canEdit: ['admin','warranty'] },
+  dashboard:      { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN'] },
+  staff:          { canView: ['ADMIN'],                                                  canEdit: ['ADMIN'] },
+  customers:      { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_SALES'] },
+  dropdowns:      { canView: ['ADMIN'],                                                  canEdit: ['ADMIN'] },
+  shipments:      { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE'],                  canEdit: ['ADMIN'] },
+  stockIn:        { canView: ['ADMIN','STAFF_WAREHOUSE'],                                canEdit: ['ADMIN'] },
+  stockOut:       { canView: ['ADMIN','STAFF_SALES'],                                    canEdit: ['ADMIN','STAFF_SALES'] },
+  adjustments:    { canView: ['ADMIN','STAFF_WAREHOUSE'],                                canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
+  database:       { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN'] },
+  faultyStock:    { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
+  warranty:       { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WARRANTY'] },
 };
 
 export function canView(role: UserRole, module: string): boolean {

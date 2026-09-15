@@ -1,11 +1,10 @@
 // ─── Login Page ─────────────────────────────────────────────────────────────
 //
 // Entry point for the app — collects username/password and authenticates
-// against a hardcoded admin/admin check (no backend yet — see AuthContext.tsx
-// for where a real API call will replace this). On success, starts a session
-// via AuthContext.login and navigates to the dashboard. A visitor who is
-// already authenticated (e.g. hit "/" directly with a session still active)
-// is bounced straight to the dashboard instead of seeing the form again.
+// against the real backend via AuthContext.login. On success, starts a
+// session and navigates to the dashboard. A visitor who is already
+// authenticated (e.g. hit "/" directly with a session still active) is
+// bounced straight to the dashboard instead of seeing the form again.
 
 import { useEffect, useState } from "react";
 import "./LoginPage.css";
@@ -36,18 +35,14 @@ function LoginPage() {
     setLoading(true);
     setError("");
 
-    // MOCK AUTH (for now - backend will replace this)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setLoading(false);
-
-    if (username !== "admin" || password !== "admin") {
-      setError("Incorrect Username Or Password");
-      return;
+    try {
+      await login(username, password);
+      navigate("/dashboard");
+    } catch {
+      setError("Invalid username or password");
+    } finally {
+      setLoading(false);
     }
-
-    login(username, "admin");
-    navigate("/dashboard");
   };
 
   return (

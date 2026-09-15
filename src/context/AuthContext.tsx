@@ -1,10 +1,10 @@
 // ─── Auth Context ────────────────────────────────────────────────────────────
 //
 // Holds the current authenticated user for the whole app and exposes
-// login/logout. The session is persisted to localStorage (key:
-// "ttglobal_user") so a page refresh doesn't log the user out. This is a
-// client-only mock — there is no real token or server-side session yet; see
-// LoginPage.tsx for the current hardcoded admin/admin check that calls login().
+// login/logout. Login calls the real backend (POST /auth/login) and persists
+// both the JWT ("ttglobal_token") and the user object ("ttglobal_user") to
+// localStorage so a page refresh doesn't log the user out — see LoginPage.tsx
+// for the calling component.
 
 import {
   createContext,
@@ -14,20 +14,30 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../services/api";
 
 export interface AuthUser {
+  id: number;
   username: string;
-  role: "admin" | "sales" | "warehouse" | "warranty";
+  fullName: string;
+  role: "ADMIN" | "STAFF_SALES" | "STAFF_WAREHOUSE" | "STAFF_WARRANTY";
+  status: string;
+}
+
+interface LoginResponse {
+  access_token: string;
+  user: AuthUser;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (username: string, role: "admin" | "sales" | "warehouse" | "warranty") => void;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
-const STORAGE_KEY = "ttglobal_user";
+const USER_STORAGE_KEY = "ttglobal_user";
+const TOKEN_STORAGE_KEY = "ttglobal_token";
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -38,25 +48,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore a previous session on mount so a page refresh doesn't log the
   // user out.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
+    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!storedUser || !storedToken) return;
 
     try {
-      setUser(JSON.parse(stored) as AuthUser);
+      setUser(JSON.parse(storedUser) as AuthUser);
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
     }
   }, []);
 
-  const login = (username: string, role: "admin" | "sales" | "warehouse" | "warranty") => {
-    const nextUser: AuthUser = { username, role };
-    setUser(nextUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+  const login = async (username: string, password: string) => {
+    const { access_token, user: loggedInUser } = await apiFetch<LoginResponse>(
+      "/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      }
+    );
+
+    localStorage.setItem(TOKEN_STORAGE_KEY, access_token);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(loggedInUser));
+    setUser(loggedInUser);
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
     navigate("/");
   };
 
