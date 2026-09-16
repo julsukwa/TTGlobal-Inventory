@@ -3,12 +3,16 @@
 // Admin screen for managing the fixed value lists used throughout the system
 // (Item Type, Fault, Vendor, Brand, RAM, Storage, Processor, Condition,
 // Generation) — e.g. the category/condition options offered during Stock In.
-// Values can only be added or edited, not deactivated/removed (per product
-// decision — see mockDropdown.ts). Each category is searched and paginated
-// independently; switching category or searching resets to page 1.
+// Backed by the real /dropdowns API for every category except Vendor, which
+// is its own Prisma model (with vendorId/isActive) rather than a
+// DropdownValue category and has no dedicated backend module yet — see
+// mockDropdown.ts. Values can only be added or edited from this screen, not
+// deactivated/removed (per product decision — see mockDropdown.ts). Each
+// category is searched and paginated independently; switching category or
+// searching resets to page 1.
 
 import "./DropdownPage.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Search,
@@ -26,6 +30,7 @@ import {
   Layers,
 } from "lucide-react";
 
+import { apiFetch } from "../../services/api";
 import {
   dropdownCategories,
   dropdownValues,
@@ -35,6 +40,36 @@ import {
 type DropdownData = {
   [key: string]: DropdownValue[];
 };
+
+// Maps this page's local category ids to the `category` string the backend
+// DropdownValue table stores (see backend/prisma/schema.prisma). "vendor"
+// has no entry — it isn't a DropdownValue category, see the file header.
+const BACKEND_CATEGORY: Record<string, string> = {
+  itemType: "ItemType",
+  fault: "Fault",
+  brand: "Brand",
+  ram: "RAM",
+  storage: "Storage",
+  processor: "Processor",
+  condition: "Condition",
+  generation: "Generation",
+};
+
+interface BackendDropdownValue {
+  id: number;
+  category: string;
+  value: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+function toDisplayValue(row: BackendDropdownValue): DropdownValue {
+  return {
+    id: row.id,
+    name: row.value,
+    dateAdded: new Date(row.createdAt).toLocaleDateString("en-GB"),
+  };
+}
 
 const categoryIcons = {
   itemType: <Package size={18} />,
@@ -58,6 +93,37 @@ function DropdownPage() {
   const [editingItem, setEditingItem] = useState<DropdownValue | null>(null);
   const [valueName, setValueName] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    apiFetch<BackendDropdownValue[]>("/dropdowns")
+      .then((rows) => {
+        if (cancelled) return;
+
+        const grouped: DropdownData = {};
+        for (const [localId, backendCategory] of Object.entries(BACKEND_CATEGORY)) {
+          grouped[localId] = rows
+            .filter((row) => row.category === backendCategory)
+            .map(toDisplayValue);
+        }
+
+        setDropdownData((prev) => ({ ...prev, ...grouped }));
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setLoadError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const currentValues = dropdownData[selectedCategory] || [];
 
@@ -88,7 +154,7 @@ function DropdownPage() {
     setValueError(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmedName = valueName.trim();
 
     if (!trimmedName) {
@@ -112,28 +178,70 @@ function DropdownPage() {
       return;
     }
 
-    if (editingItem) {
-      setDropdownData((prev) => ({
-        ...prev,
-        [selectedCategory]: prev[selectedCategory].map((item) =>
-          item.id === editingItem.id ? { ...item, name: trimmedName } : item
-        ),
-      }));
-    } else {
-      const newItem: DropdownValue = {
-        id: Date.now(),
-        name: trimmedName,
-        dateAdded: new Date().toLocaleDateString("en-GB"),
-      };
+    const backendCategory = BACKEND_CATEGORY[selectedCategory];
 
-      setDropdownData((prev) => ({
-        ...prev,
-        [selectedCategory]: [...prev[selectedCategory], newItem],
-      }));
+    // Vendor isn't backed by the /dropdowns API yet (see file header) — keep
+    // the existing local-only behavior for that tab.
+    if (!backendCategory) {
+      if (editingItem) {
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: prev[selectedCategory].map((item) =>
+            item.id === editingItem.id ? { ...item, name: trimmedName } : item
+          ),
+        }));
+      } else {
+        const newItem: DropdownValue = {
+          id: Date.now(),
+          name: trimmedName,
+          dateAdded: new Date().toLocaleDateString("en-GB"),
+        };
+
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: [...prev[selectedCategory], newItem],
+        }));
+      }
+
+      setValueError(null);
+      setShowModal(false);
+      return;
     }
 
-    setValueError(null);
-    setShowModal(false);
+    setSaving(true);
+
+    try {
+      if (editingItem) {
+        const updated = await apiFetch<BackendDropdownValue>(`/dropdowns/${editingItem.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ value: trimmedName }),
+        });
+
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: prev[selectedCategory].map((item) =>
+            item.id === editingItem.id ? toDisplayValue(updated) : item
+          ),
+        }));
+      } else {
+        const created = await apiFetch<BackendDropdownValue>("/dropdowns", {
+          method: "POST",
+          body: JSON.stringify({ category: backendCategory, value: trimmedName }),
+        });
+
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: [...prev[selectedCategory], toDisplayValue(created)],
+        }));
+      }
+
+      setValueError(null);
+      setShowModal(false);
+    } catch (err) {
+      setValueError(err instanceof Error ? err.message : "Failed to save value.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getCategoryCount = (categoryId: string) => {
@@ -213,7 +321,19 @@ function DropdownPage() {
               </thead>
 
               <tbody>
-                {filteredValues.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={3} className="empty-state">
+                      Loading...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={3} className="empty-state">
+                      Failed to load dropdown values: {loadError}
+                    </td>
+                  </tr>
+                ) : filteredValues.length > 0 ? (
                   paginatedValues.map((item) => (
                     <tr key={item.id}>
                       <td>{item.name}</td>
@@ -304,11 +424,11 @@ function DropdownPage() {
             </div>
 
             <div className="modal-footer">
-              <button className="cancel-btn" onClick={closeModal}>
+              <button className="cancel-btn" onClick={closeModal} disabled={saving}>
                 Cancel
               </button>
-              <button className="save-btn" onClick={handleSave}>
-                Save
+              <button className="save-btn" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
