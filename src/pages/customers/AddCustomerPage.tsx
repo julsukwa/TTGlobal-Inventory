@@ -4,6 +4,10 @@
 // a static layout only — fields are uncontrolled and Save/Cancel have no
 // handlers wired up yet; the customer creation flow used today is the modal
 // inside CustomerPage.tsx (see handleSaveCustomer there).
+//
+// NOTE: This page is not currently linked or navigated to from anywhere in
+// the app — App.tsx defines the /customers/new route, but no <Link> or
+// navigate() call reaches it. CustomerPage.tsx handles add/edit via modal.
 
 import "./AddCustomerPage.css";
 

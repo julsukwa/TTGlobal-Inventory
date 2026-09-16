@@ -232,6 +232,13 @@ export default function StaffPage() {
     closeAddModal();
   };
 
+  const handleAddStaffKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleCreateStaff();
+    }
+  };
+
   // ── Change password ──────────────────────────────────────────────────────
 
   const openPasswordModal = (member: StaffMember) => {
@@ -273,6 +280,13 @@ export default function StaffPage() {
     closePasswordModal();
   };
 
+  const handlePasswordKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleUpdatePassword();
+    }
+  };
+
   // ── Edit staff ───────────────────────────────────────────────────────────
 
   const openEditModal = (member: StaffMember) => {
@@ -299,6 +313,13 @@ export default function StaffPage() {
       )
     );
     closeEditModal();
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveEdit();
+    }
   };
 
   // ── Activate / deactivate / delete ───────────────────────────────────────
@@ -588,6 +609,7 @@ export default function StaffPage() {
               type="password"
               value={addForm.confirmPassword}
               onChange={(e) => updateAddForm("confirmPassword", e.target.value)}
+              onKeyDown={handleAddStaffKeyDown}
             />
             {addFormErrors.confirmPassword && (
               <span className="field-error">{addFormErrors.confirmPassword}</span>
@@ -676,6 +698,7 @@ export default function StaffPage() {
                     setConfirmNewPassword(e.target.value);
                     setPasswordErrors((prev) => ({ ...prev, confirmNewPassword: undefined }));
                   }}
+                  onKeyDown={handlePasswordKeyDown}
                 />
                 {passwordErrors.confirmNewPassword && (
                   <span className="field-error">{passwordErrors.confirmNewPassword}</span>
@@ -730,6 +753,7 @@ export default function StaffPage() {
                   onChange={(e) =>
                     setEditForm((prev) => ({ ...prev, email: e.target.value }))
                   }
+                  onKeyDown={handleEditKeyDown}
                 />
               </div>
 

@@ -1,5 +1,5 @@
 import "./ShipmentPage.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import mockShipments from "./mockShipments";
 import type { Shipment } from "./shipmentTypes";
@@ -11,6 +11,16 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+
+import { apiFetch } from "../../services/api";
+
+interface Vendor {
+  id: number;
+  vendorId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
 
 function ShipmentPage() {
 
@@ -30,6 +40,13 @@ function ShipmentPage() {
 
   const closeModal = () => { setShowModal(false); setEditingShipment(null); };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveShipment();
+    }
+  };
+
   const getStatusClass = (status: string) => {
     switch (status) {
       case "Complete":   return "status-complete";
@@ -38,7 +55,16 @@ function ShipmentPage() {
     }
   };
 
-  const vendors = ["TTL", "MWS", "Dell"];
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+
+  useEffect(() => {
+    apiFetch<Vendor[]>("/vendors/active")
+      .then(setVendors)
+      .catch(() => {
+        // The vendor dropdown just stays empty on failure — the rest of the
+        // page (shipment table) is unaffected since it's still mock-backed.
+      });
+  }, []);
 
   const handleSaveShipment = () => {
     if (
@@ -274,6 +300,7 @@ function ShipmentPage() {
                 <input
                   value={shipmentId}
                   onChange={(e) => setShipmentId(e.target.value)}
+                  onKeyDown={handleKeyDown}
                 />
               </div>
               <div className="form-field">
@@ -281,6 +308,7 @@ function ShipmentPage() {
                 <input
                   value={shipmentName}
                   onChange={(e) => setShipmentName(e.target.value)}
+                  onKeyDown={handleKeyDown}
                 />
               </div>
               <div className="form-field">
@@ -291,7 +319,7 @@ function ShipmentPage() {
                 >
                   <option value="">Select Vendor</option>
                   {vendors.map((v) => (
-                    <option key={v} value={v}>{v}</option>
+                    <option key={v.vendorId} value={v.vendorId}>{`${v.vendorId} — ${v.name}`}</option>
                   ))}
                 </select>
               </div>
@@ -301,6 +329,7 @@ function ShipmentPage() {
                   type="number"
                   value={itemsSent}
                   onChange={(e) => setItemsSent(e.target.value)}
+                  onKeyDown={handleKeyDown}
                 />
               </div>
               <div className="form-field">
@@ -309,6 +338,7 @@ function ShipmentPage() {
                   type="date"
                   value={shipmentDate}
                   onChange={(e) => setShipmentDate(e.target.value)}
+                  onKeyDown={handleKeyDown}
                 />
               </div>
             </div>

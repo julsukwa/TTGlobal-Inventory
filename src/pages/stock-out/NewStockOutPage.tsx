@@ -58,6 +58,13 @@ export default function NewStockOutPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleProceed();
+    }
+  };
+
   const handleProceed = () => {
     if (!validate()) return;
 
@@ -194,6 +201,7 @@ export default function NewStockOutPage() {
                   setInvoiceNumber(e.target.value);
                   setErrors((prev) => ({ ...prev, invoice: undefined }));
                 }}
+                onKeyDown={handleKeyDown}
                 className={`nso-text-input ${errors.invoice ? "nso-input-error" : ""}`}
               />
               {errors.invoice && (

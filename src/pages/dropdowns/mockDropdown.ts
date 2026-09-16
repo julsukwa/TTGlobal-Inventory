@@ -1,17 +1,13 @@
+// DEPRECATED: This mock file is no longer used by DropdownPage.tsx, which now calls the real API.
+// It is kept only because other pages (NewAdjustmentPage, FaultyStockPage)
+// still reference it for their form field options until those pages are wired to the backend.
+// Do not delete until all consumers are migrated.
+
 // ─── Dropdown value shape ──────────────────────────────────────────────────────
 // Description and Active/Inactive status have been removed from this module —
 // dropdown values are now simple name + date-added records. Deactivation/
 // historical-preservation behavior described in the original documentation has
 // been dropped per product decision; values can only be added or edited.
-//
-// DEPRECATED: `dropdownValues` is now only the real source of data for the
-// "vendor" category — see DropdownPage.tsx. Vendor is a separate Prisma
-// model (with vendorId/isActive) rather than a DropdownValue category and
-// has no backend module yet, so it still reads/writes this mock array. Every
-// other category here (itemType, fault, brand, ram, storage, processor,
-// condition, generation) is fetched from the real /dropdowns API on load and
-// only briefly shows this mock data before that fetch resolves; once a
-// Vendor backend module exists, this file can be removed entirely.
 
 export interface DropdownValue {
   id: number;

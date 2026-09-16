@@ -2,17 +2,16 @@
 //
 // Lists all customers in the system with search, location filtering, and
 // pagination. Supports inline add/edit/delete via modals, and exporting the
-// current filtered list to an .xlsx report. Customer Name and Phone Number
-// are the only required fields — Email and Location are optional.
+// current filtered list as a CSV downloaded from the backend. Customer Name
+// and Phone Number are the only required fields — Email and Location are
+// optional.
 //
-// BACKEND INTEGRATION SEAM: customers are held in local state seeded from
-// mockCustomers; a real API would back CRUD here (GET/POST/PATCH/DELETE
-// /customers).
+// Backed by the real /customers API (GET/POST/PATCH/DELETE, plus GET
+// /customers/export for the CSV download). Search is server-side (debounced);
+// the location filter is applied client-side on top of the fetched list.
 
 import "./CustomerPage.css";
-import mockCustomers from "./mockCustomers";
-import { useState } from "react";
-import * as XLSX from "xlsx";
+import { useEffect, useState } from "react";
 
 import {
   Plus,
@@ -24,12 +23,28 @@ import {
   Filter,
 } from "lucide-react";
 
-import type { Customer } from "../stock-out/stockOutTypes";
+import { apiFetch, apiFetchBlob } from "../../services/api";
+
+interface Customer {
+  id: number;
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 function CustomerPage() {
   const [showModal, setShowModal] = useState(false);
 
-  const [customers, setCustomers] = useState(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -41,108 +56,133 @@ function CustomerPage() {
   const [selectedLocation, setSelectedLocation] = useState("All Locations");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [formErrors, setFormErrors] = useState<{ name?: string; phone?: string }>({});
+  const [formErrors, setFormErrors] = useState<{ fullName?: string; phone?: string }>({});
 
-  const handleSaveCustomer = () => {
-  const newErrors: { name?: string; phone?: string } = {};
-  if (!customerName.trim()) newErrors.name = "Customer Name is required.";
-  if (!phoneNumber.trim()) newErrors.phone = "Phone Number is required.";
+  // Fetches on mount (searchTerm starts empty) and again, debounced, whenever
+  // the search box changes — the backend does the name/email/phone matching.
+  useEffect(() => {
+    let cancelled = false;
 
-  if (Object.keys(newErrors).length > 0) {
-    setFormErrors(newErrors);
-    return;
-  }
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
 
-  if (editingCustomer) {
+      const query = searchTerm.trim();
+      const endpoint = query ? `/customers?search=${encodeURIComponent(query)}` : "/customers";
 
-    const updatedCustomers = customers.map((customer) =>
-      customer.id === editingCustomer.id
-        ? {
-            ...customer,
-            name: customerName,
-            phone: phoneNumber,
-            email: emailAddress,
-            location: location,
-          }
-        : customer
-    );
+      apiFetch<Customer[]>(endpoint)
+        .then((data) => {
+          if (!cancelled) setCustomers(data);
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
 
-    setCustomers(updatedCustomers);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchTerm]);
 
-  } else {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveCustomer();
+    }
+  };
 
-    const newCustomer = {
-      id: Date.now(),
+  const handleSaveCustomer = async () => {
+    const newErrors: { fullName?: string; phone?: string } = {};
+    if (!customerName.trim()) newErrors.fullName = "Customer Name is required.";
+    if (!phoneNumber.trim()) newErrors.phone = "Phone Number is required.";
 
-      name: customerName,
-      email: emailAddress,
-      phone: phoneNumber,
-      location: location,
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      return;
+    }
 
-      dateAdded: new Date().toLocaleDateString("en-GB"),
+    setSaving(true);
+    setApiError(null);
+
+    const payload = {
+      fullName: customerName.trim(),
+      phone: phoneNumber.trim(),
+      email: emailAddress.trim(),
+      location: location.trim(),
     };
 
-    setCustomers([newCustomer, ...customers]);
-  }
+    try {
+      if (editingCustomer) {
+        const updated = await apiFetch<Customer>(`/customers/${editingCustomer.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      } else {
+        const created = await apiFetch<Customer>("/customers", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setCustomers((prev) => [created, ...prev]);
+      }
 
-  setCustomerName("");
-  setPhoneNumber("");
-  setEmailAddress("");
-  setLocation("");
-
-  setEditingCustomer(null);
-  setFormErrors({});
-
-  setShowModal(false);
-};
+      setCustomerName("");
+      setPhoneNumber("");
+      setEmailAddress("");
+      setLocation("");
+      setEditingCustomer(null);
+      setFormErrors({});
+      setShowModal(false);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to save customer.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleEditCustomer = (customer: Customer) => {
-  setEditingCustomer(customer);
+    setEditingCustomer(customer);
+    setCustomerName(customer.fullName);
+    setPhoneNumber(customer.phone);
+    setEmailAddress(customer.email);
+    setLocation(customer.location);
+    setFormErrors({});
+    setApiError(null);
+    setShowModal(true);
+  };
 
-  setCustomerName(customer.name);
-  setPhoneNumber(customer.phone);
-  setEmailAddress(customer.email);
-  setLocation(customer.location);
-  setFormErrors({});
+  const handleDeleteClick = (customer: Customer) => {
+    setCustomerToDelete(customer);
+    setApiError(null);
+    setShowDeleteModal(true);
+  };
 
-  setShowModal(true);
-};
+  const confirmDeleteCustomer = async () => {
+    if (!customerToDelete) return;
 
-const handleDeleteClick = (customer: Customer) => {
-  setCustomerToDelete(customer);
-  setShowDeleteModal(true);
-};
+    setDeleting(true);
+    setApiError(null);
 
-const confirmDeleteCustomer = () => {
+    try {
+      await apiFetch(`/customers/${customerToDelete.id}`, { method: "DELETE" });
+      setCustomers((prev) => prev.filter((customer) => customer.id !== customerToDelete.id));
+      setCustomerToDelete(null);
+      setShowDeleteModal(false);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to delete customer.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-  if (!customerToDelete) return;
-
-  const updatedCustomers = customers.filter(
-    (customer) =>
-      customer.id !== customerToDelete.id
-  );
-
-  setCustomers(updatedCustomers);
-
-  setCustomerToDelete(null);
-
-  setShowDeleteModal(false);
-};
-
+  // Search is already applied server-side (see the fetch effect above) —
+  // this only narrows the fetched list by the client-side location filter.
   const filteredCustomers = customers.filter(
-  (customer) => {
-
-    const matchesSearch =
-      customer.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-
-    const matchesLocation =
-      selectedLocation === "All Locations" ||
-      customer.location === selectedLocation;
-
-    return matchesSearch && matchesLocation;
-  }
+    (customer) => selectedLocation === "All Locations" || customer.location === selectedLocation
   );
 
   const customersPerPage = 10;
@@ -163,47 +203,25 @@ const confirmDeleteCustomer = () => {
       endIndex
     );
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
+    setApiError(null);
 
-  const exportData = filteredCustomers.map(
-    (customer) => ({
-      /*"S/N": index + 1,*/
-      "Customer Name": customer.name,
-      "Phone Number": customer.phone,
-      "Email Address": customer.email,
-      Location: customer.location,
-      "Date Added": customer.dateAdded,
-    })
-  );
-
-  const worksheet =
-    XLSX.utils.json_to_sheet(exportData);
-
-  worksheet["!cols"] = [
-  /*{ wch: 8 },*/
-  { wch: 30 },
-  { wch: 20 },
-  { wch: 35 },
-  { wch: 20 },
-  { wch: 15 },
-  ];
-
-  const workbook =
-    XLSX.utils.book_new();
-
-  XLSX.utils.book_append_sheet(
-    workbook,
-    worksheet,
-    "Customers"
-  );
-
-  XLSX.writeFile(
-    workbook,
-    `Customer_Report_${new Date()
-      .toLocaleDateString("en-GB")
-      .replace(/\//g, "-")}.xlsx`
-  );
-};
+    try {
+      const blob = await apiFetchBlob("/customers/export");
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Customer_Report_${new Date()
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-")}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to export customers.");
+    }
+  };
 
 const locations = [
   "All Locations",
@@ -235,6 +253,7 @@ const locations = [
             className="btn-primary"
             onClick={() => {
               setFormErrors({});
+              setApiError(null);
               setShowModal(true);
             }}
           >
@@ -253,6 +272,8 @@ const locations = [
         </div>
 
       </div>
+
+      {apiError && <p className="field-error">{apiError}</p>}
 
       {/* Table Card */}
 
@@ -338,14 +359,34 @@ const locations = [
 
           <tbody>
 
-            {paginatedCustomers.map((customer, index) => (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="no-results">
+                  Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={7} className="no-results">
+                  Failed to load customers: {error}
+                </td>
+              </tr>
+            ) : paginatedCustomers.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="no-results">
+                  No customers found.
+                </td>
+              </tr>
+            ) : (
+
+            paginatedCustomers.map((customer, index) => (
 
               <tr key={customer.id}>
 
                 <td>{startIndex +index +1}</td>
 
                 <td className="customer-name">
-                  {customer.name}
+                  {customer.fullName}
                 </td>
 
                 <td>{customer.email}</td>
@@ -354,7 +395,7 @@ const locations = [
 
                 <td>{customer.location}</td>
 
-                <td>{customer.dateAdded}</td>
+                <td>{new Date(customer.createdAt).toLocaleDateString("en-GB")}</td>
 
                 <td>
 
@@ -380,7 +421,8 @@ const locations = [
 
               </tr>
 
-            ))}
+            ))
+            )}
 
           </tbody>
 
@@ -437,7 +479,7 @@ const locations = [
                 </button>
 
             ))}
-                
+
             <button
               disabled={currentPage === totalPages}
               onClick={() =>
@@ -498,13 +540,14 @@ const locations = [
                   value={customerName}
                   onChange={(e) => {
                     setCustomerName(e.target.value);
-                    setFormErrors((prev) => ({ ...prev, name: undefined }));
+                    setFormErrors((prev) => ({ ...prev, fullName: undefined }));
                   }}
+                  onKeyDown={handleKeyDown}
                 />
 
-                {formErrors.name && (
+                {formErrors.fullName && (
                   <span className="field-error">
-                    {formErrors.name}
+                    {formErrors.fullName}
                   </span>
                 )}
 
@@ -521,6 +564,7 @@ const locations = [
                     setPhoneNumber(e.target.value);
                     setFormErrors((prev) => ({ ...prev, phone: undefined }));
                   }}
+                  onKeyDown={handleKeyDown}
                 />
 
                 {formErrors.phone && (
@@ -541,6 +585,7 @@ const locations = [
                   onChange={(e) =>
                     setEmailAddress(e.target.value)
                   }
+                  onKeyDown={handleKeyDown}
                 />
 
               </div>
@@ -555,11 +600,14 @@ const locations = [
                   onChange={(e) =>
                     setLocation(e.target.value)
                   }
+                  onKeyDown={handleKeyDown}
                 />
 
               </div>
 
             </div>
+
+            {apiError && <p className="field-error">{apiError}</p>}
 
             <div className="modal-actions">
 
@@ -569,6 +617,7 @@ const locations = [
                   setShowModal(false);
                   setFormErrors({});
                 }}
+                disabled={saving}
               >
                 Cancel
               </button>
@@ -576,8 +625,11 @@ const locations = [
               <button
                 className="modal-save"
                 onClick={handleSaveCustomer}
+                disabled={saving}
               >
-                {editingCustomer
+                {saving
+                  ? "Saving..."
+                  : editingCustomer
                   ? "Update Customer"
                   : "Save Customer"}
               </button>
@@ -608,7 +660,7 @@ const locations = [
         Are you sure you want to delete
         <strong>
           {" "}
-          {customerToDelete?.name}
+          {customerToDelete?.fullName}
         </strong>
         ?
       </p>
@@ -617,11 +669,14 @@ const locations = [
         This action cannot be undone.
       </span>
 
+      {apiError && <p className="field-error">{apiError}</p>}
+
       <div className="delete-actions">
 
         <button
           className="modal-cancel"
           onClick={() => setShowDeleteModal(false)}
+          disabled={deleting}
         >
           Cancel
         </button>
@@ -629,8 +684,9 @@ const locations = [
         <button
           className="delete-confirm-btn"
           onClick={confirmDeleteCustomer}
+          disabled={deleting}
         >
-          Delete
+          {deleting ? "Deleting..." : "Delete"}
         </button>
 
       </div>

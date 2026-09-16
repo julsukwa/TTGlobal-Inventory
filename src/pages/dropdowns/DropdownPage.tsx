@@ -3,13 +3,11 @@
 // Admin screen for managing the fixed value lists used throughout the system
 // (Item Type, Fault, Vendor, Brand, RAM, Storage, Processor, Condition,
 // Generation) — e.g. the category/condition options offered during Stock In.
-// Backed by the real /dropdowns API for every category except Vendor, which
-// is its own Prisma model (with vendorId/isActive) rather than a
-// DropdownValue category and has no dedicated backend module yet — see
-// mockDropdown.ts. Values can only be added or edited from this screen, not
-// deactivated/removed (per product decision — see mockDropdown.ts). Each
-// category is searched and paginated independently; switching category or
-// searching resets to page 1.
+// Backed entirely by the real /dropdowns API: all values are fetched on
+// mount (for sidebar counts) and re-fetched per category on selection: add,
+// edit, and active/inactive toggling all call through to the backend, which
+// never hard-deletes a value. Each category is searched and paginated
+// independently; switching category or searching resets to page 1.
 
 import "./DropdownPage.css";
 import { useEffect, useState } from "react";
@@ -18,6 +16,7 @@ import {
   Search,
   Plus,
   Pencil,
+  Power,
   X,
   Package,
   AlertTriangle,
@@ -30,23 +29,27 @@ import {
   Layers,
 } from "lucide-react";
 
-import { apiFetch } from "../../services/api";
-import {
-  dropdownCategories,
-  dropdownValues,
-  type DropdownValue,
-} from "./mockDropdown";
+import { apiFetch, ApiError } from "../../services/api";
+import { StatusBadge } from "../../components/ui";
 
-type DropdownData = {
-  [key: string]: DropdownValue[];
-};
+const DROPDOWN_CATEGORIES = [
+  { id: "itemType", name: "Item Type" },
+  { id: "fault", name: "Fault" },
+  { id: "vendor", name: "Vendor" },
+  { id: "brand", name: "Brand" },
+  { id: "ram", name: "RAM" },
+  { id: "storage", name: "Storage" },
+  { id: "processor", name: "Processor" },
+  { id: "condition", name: "Condition" },
+  { id: "generation", name: "Generation" },
+];
 
 // Maps this page's local category ids to the `category` string the backend
-// DropdownValue table stores (see backend/prisma/schema.prisma). "vendor"
-// has no entry — it isn't a DropdownValue category, see the file header.
+// DropdownValue table stores (see backend/prisma/schema.prisma).
 const BACKEND_CATEGORY: Record<string, string> = {
   itemType: "ItemType",
   fault: "Fault",
+  vendor: "Vendor",
   brand: "Brand",
   ram: "RAM",
   storage: "Storage",
@@ -54,6 +57,13 @@ const BACKEND_CATEGORY: Record<string, string> = {
   condition: "Condition",
   generation: "Generation",
 };
+
+interface DropdownValue {
+  id: number;
+  name: string;
+  dateAdded: string;
+  isActive: boolean;
+}
 
 interface BackendDropdownValue {
   id: number;
@@ -63,11 +73,16 @@ interface BackendDropdownValue {
   createdAt: string;
 }
 
+type DropdownData = {
+  [key: string]: DropdownValue[];
+};
+
 function toDisplayValue(row: BackendDropdownValue): DropdownValue {
   return {
     id: row.id,
     name: row.value,
     dateAdded: new Date(row.createdAt).toLocaleDateString("en-GB"),
+    isActive: row.isActive,
   };
 }
 
@@ -85,7 +100,7 @@ const categoryIcons = {
 
 function DropdownPage() {
   const [selectedCategory, setSelectedCategory] = useState("itemType");
-  const [dropdownData, setDropdownData] = useState<DropdownData>(dropdownValues as DropdownData);
+  const [dropdownData, setDropdownData] = useState<DropdownData>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -94,9 +109,13 @@ function DropdownPage() {
   const [valueName, setValueName] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [categoryLoading, setCategoryLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Fetch every value once on mount so the sidebar can show a count per
+  // category without a request per tab.
   useEffect(() => {
     let cancelled = false;
 
@@ -124,6 +143,37 @@ function DropdownPage() {
       cancelled = true;
     };
   }, []);
+
+  // Re-fetch the selected category's values whenever it changes, so the
+  // list is always fresh rather than relying solely on the mount-time fetch.
+  useEffect(() => {
+    const backendCategory = BACKEND_CATEGORY[selectedCategory];
+    if (!backendCategory) return;
+
+    let cancelled = false;
+    setCategoryLoading(true);
+
+    apiFetch<BackendDropdownValue[]>(
+      `/dropdowns?category=${encodeURIComponent(backendCategory)}`
+    )
+      .then((rows) => {
+        if (cancelled) return;
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: rows.map(toDisplayValue),
+        }));
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setLoadError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setCategoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory]);
 
   const currentValues = dropdownData[selectedCategory] || [];
 
@@ -154,6 +204,13 @@ function DropdownPage() {
     setValueError(null);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   const handleSave = async () => {
     const trimmedName = valueName.trim();
 
@@ -167,47 +224,7 @@ function DropdownPage() {
       return;
     }
 
-    const duplicate = currentValues.find(
-      (item) =>
-        item.name.toLowerCase() === trimmedName.toLowerCase() &&
-        item.id !== editingItem?.id
-    );
-
-    if (duplicate) {
-      setValueError(`"${trimmedName}" already exists.`);
-      return;
-    }
-
     const backendCategory = BACKEND_CATEGORY[selectedCategory];
-
-    // Vendor isn't backed by the /dropdowns API yet (see file header) — keep
-    // the existing local-only behavior for that tab.
-    if (!backendCategory) {
-      if (editingItem) {
-        setDropdownData((prev) => ({
-          ...prev,
-          [selectedCategory]: prev[selectedCategory].map((item) =>
-            item.id === editingItem.id ? { ...item, name: trimmedName } : item
-          ),
-        }));
-      } else {
-        const newItem: DropdownValue = {
-          id: Date.now(),
-          name: trimmedName,
-          dateAdded: new Date().toLocaleDateString("en-GB"),
-        };
-
-        setDropdownData((prev) => ({
-          ...prev,
-          [selectedCategory]: [...prev[selectedCategory], newItem],
-        }));
-      }
-
-      setValueError(null);
-      setShowModal(false);
-      return;
-    }
-
     setSaving(true);
 
     try {
@@ -238,9 +255,33 @@ function DropdownPage() {
       setValueError(null);
       setShowModal(false);
     } catch (err) {
-      setValueError(err instanceof Error ? err.message : "Failed to save value.");
+      if (err instanceof ApiError && err.status === 409) {
+        setValueError("This value already exists in this category");
+      } else {
+        setValueError(err instanceof Error ? err.message : "Failed to save value.");
+      }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleActive = async (item: DropdownValue) => {
+    setActionError(null);
+    const endpoint = item.isActive
+      ? `/dropdowns/${item.id}/deactivate`
+      : `/dropdowns/${item.id}/reactivate`;
+
+    try {
+      const updated = await apiFetch<BackendDropdownValue>(endpoint, { method: "PATCH" });
+
+      setDropdownData((prev) => ({
+        ...prev,
+        [selectedCategory]: prev[selectedCategory].map((value) =>
+          value.id === item.id ? toDisplayValue(updated) : value
+        ),
+      }));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update status.");
     }
   };
 
@@ -264,7 +305,7 @@ function DropdownPage() {
         <div className="dropdown-sidebar">
           <div className="sidebar-title">Categories</div>
 
-          {dropdownCategories.map((category) => (
+          {DROPDOWN_CATEGORIES.map((category) => (
             <button
               key={category.id}
               className={`category-btn ${
@@ -273,6 +314,7 @@ function DropdownPage() {
               onClick={() => {
                 setSelectedCategory(category.id);
                 setCurrentPage(1);
+                setActionError(null);
               }}
             >
               <div className="category-left">
@@ -310,26 +352,29 @@ function DropdownPage() {
             </div>
           </div>
 
+          {actionError && <p className="field-error">{actionError}</p>}
+
           <div className="table-card">
             <table className="dropdown-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Date Added</th>
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {loading ? (
+                {loading || categoryLoading ? (
                   <tr>
-                    <td colSpan={3} className="empty-state">
+                    <td colSpan={4} className="empty-state">
                       Loading...
                     </td>
                   </tr>
                 ) : loadError ? (
                   <tr>
-                    <td colSpan={3} className="empty-state">
+                    <td colSpan={4} className="empty-state">
                       Failed to load dropdown values: {loadError}
                     </td>
                   </tr>
@@ -339,9 +384,19 @@ function DropdownPage() {
                       <td>{item.name}</td>
                       <td>{item.dateAdded}</td>
                       <td>
+                        <StatusBadge status={item.isActive ? "Active" : "Inactive"} />
+                      </td>
+                      <td>
                         <div className="action-buttons">
                           <button className="edit-btn" onClick={() => handleEditClick(item)}>
                             <Pencil size={15} />
+                          </button>
+                          <button
+                            className="edit-btn"
+                            title={item.isActive ? "Deactivate" : "Reactivate"}
+                            onClick={() => handleToggleActive(item)}
+                          >
+                            <Power size={15} />
                           </button>
                         </div>
                       </td>
@@ -349,7 +404,7 @@ function DropdownPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={3} className="empty-state">
+                    <td colSpan={4} className="empty-state">
                       No values found
                     </td>
                   </tr>
@@ -413,6 +468,7 @@ function DropdownPage() {
                     setValueName(e.target.value);
                     setValueError(null);
                   }}
+                  onKeyDown={handleKeyDown}
                   autoFocus
                 />
                 {valueError && (
