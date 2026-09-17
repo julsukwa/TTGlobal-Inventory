@@ -2,13 +2,18 @@
 //
 // Dedicated workspace for every inventory item currently marked Faulty — the
 // same underlying records shown on DatabasePage filtered to status "Faulty",
-// but with fault-specific columns (fault types, date marked faulty, who
-// marked it) and fault-specific actions (edit fault, restore to Ok).
+// but with fault-specific columns (fault types, date marked faulty) and
+// fault-specific actions (edit fault, restore to Ok).
 //
-// BACKEND INTEGRATION SEAM:
-//   GET   /inventory/faulty                → list all Faulty assets (this page's data source)
-//   PATCH /inventory/:assetId/fault        → update faultTypes and notes (Edit Fault modal)
-//   PATCH /inventory/:assetId/restore      → clear faultTypes and set status back to Ok
+// Backed by the real /inventory API (see backend/src/inventory), filtered to
+// status=FAULTY. The Adjustments endpoint (who marked an item faulty, and
+// when, as its own auditable record) isn't built yet, so in the meantime:
+//   - dateMarkedFaulty uses the item's updatedAt as the closest available
+//     proxy (sourced from the same InventoryItem returned by GET /inventory)
+//   - adjustedBy has no backing data yet and is shown as "—"
+// Both should be swapped for real Adjustment records once that endpoint exists.
+
+import type { BackendInventoryItem } from "../database/databaseTypes";
 
 export interface FaultyStockItem {
   assetId: string;
@@ -23,9 +28,42 @@ export interface FaultyStockItem {
   screenType: string;
   faultTypes: string[];
   dateMarkedFaulty: string; // display string e.g. '18/06/2026 10:34 AM'
-  adjustedBy: string; // username of who marked it faulty
+  adjustedBy: string; // username of who marked it faulty — not available yet, see above
   shipmentId: string;
   batchId: string;
   listNumber: string;
   notes: string;
+}
+
+function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  const datePart = date.toLocaleDateString("en-GB");
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${datePart} ${timePart}`;
+}
+
+export function toFaultyStockItem(raw: BackendInventoryItem): FaultyStockItem {
+  return {
+    assetId: raw.assetId,
+    category: raw.category,
+    brand: raw.brand,
+    model: raw.model,
+    processor: raw.processor,
+    generation: raw.generation,
+    ram: raw.ram,
+    storage: raw.storage,
+    speed: raw.speed,
+    screenType: raw.screenType,
+    faultTypes: raw.faultTypes,
+    dateMarkedFaulty: formatDateTime(raw.updatedAt),
+    adjustedBy: "—",
+    shipmentId: raw.shipment.shipmentId,
+    batchId: raw.batch.batchId,
+    listNumber: raw.listNumber,
+    notes: raw.notes,
+  };
 }

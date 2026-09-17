@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import "./ScanItemsPage.css";
-import { mockInventoryPool } from "./mockStockOut";
 import type {
   ScannedItem,
   ScannedItemSource,
@@ -19,16 +18,15 @@ import type {
   BackendItemStatus,
 } from "./stockOutTypes";
 import { displayItemStatus } from "./stockOutTypes";
+import type { BackendInventoryItem as InventoryDetailItem } from "../database/databaseTypes";
 import { apiFetch, ApiError } from "../../services/api";
 import { Modal, Button } from "../../components/ui";
 
-// BACKEND INTEGRATION SEAM: individual asset lookup needs GET /inventory/:assetId
-// endpoint — to be built in the inventory/database module. For now keep the
-// mock inventory pool lookup for individual scans only.
-//
-// The two bulk-add methods below (List Number, Batch ID) ARE wired to the
+// The two bulk-add methods below (List Number, Batch ID) are wired to the
 // real API: GET /stock-out/lookup/list-number and GET /stock-out/lookup/batch
 // — both already scoped server-side to status OK/FAULTY and not-yet-issued.
+// The individual scan (Method 1) uses GET /inventory/:assetId instead, since
+// it needs to look up any single asset regardless of list/batch grouping.
 
 interface LocationState {
   customer: Customer;
@@ -40,6 +38,7 @@ type ScanError =
   | "not_found"
   | "already_issued"
   | "duplicate_scan"
+  | "lookup_failed"
   | null;
 
 /** Which of the two bulk-add sections a pending/skipped-count result belongs
@@ -116,13 +115,36 @@ function toScannedItem(item: BackendInventoryItem, shipmentIdOverride?: string):
   };
 }
 
-// The mock inventory pool can only ever contain "Ok" | "Faulty" items (see
-// StockOutItemStatus) — a real inventory endpoint could still hand back a
-// stale "Issued" row, so this filter is kept (and type-cast) defensively
-// rather than assumed away. The bulk lookup endpoints already exclude
-// ISSUED items server-side, so this is a no-op for API-sourced items.
+// ScannedItem.status is typed to only ever be "Ok" | "Faulty" (see
+// StockOutItemStatus), but the bulk lookup endpoints are still a network
+// response, not a compile-time guarantee — this filter is kept (and
+// type-cast) defensively rather than assumed away. It's a no-op today since
+// those endpoints already exclude ISSUED items server-side.
 function isIssuedStatus(item: ScannedItem): boolean {
   return (item.status as string) === "Issued";
+}
+
+/** Maps a single GET /inventory/:assetId response into the frontend's
+ * ScannedItem shape. Only called once the item's status has already been
+ * confirmed not to be ISSUED. */
+function toScannedItemFromInventory(item: InventoryDetailItem): ScannedItem {
+  return {
+    assetId: item.assetId,
+    category: item.category,
+    brand: item.brand,
+    model: item.model,
+    processor: item.processor,
+    generation: item.generation,
+    ram: item.ram,
+    storage: item.storage,
+    speed: item.speed,
+    screenType: item.screenType,
+    status: displayItemStatus(item.status as "OK" | "FAULTY"),
+    batchId: item.batch.batchId,
+    shipmentId: item.shipment.shipmentId,
+    source: "scan",
+    listNumber: item.listNumber,
+  };
 }
 
 export default function ScanItemsPage() {
@@ -181,7 +203,7 @@ export default function ScanItemsPage() {
 
   // ── Method 1 — Scan Individual Item (unchanged behaviour, source added) ──
 
-  const handleScan = () => {
+  const handleScan = async () => {
     const assetId = assetInput.trim().toUpperCase();
     setScanError(null);
     setLastScanned(null);
@@ -195,21 +217,26 @@ export default function ScanItemsPage() {
       return;
     }
 
-    // BACKEND INTEGRATION SEAM: replace lookup below with
-    // GET /inventory/:assetId — returns item or 404
-    const found = mockInventoryPool.find((i) => i.assetId === assetId);
+    try {
+      const item = await apiFetch<InventoryDetailItem>(
+        `/inventory/${encodeURIComponent(assetId)}`
+      );
 
-    if (!found) {
-      setScanError("not_found");
+      if (item.status === "ISSUED") {
+        setScanError("already_issued");
+        setAssetInput("");
+        return;
+      }
+
+      // Both Ok and Faulty items are eligible for Stock Out
+      setScannedItems((prev) => [...prev, toScannedItemFromInventory(item)]);
+      setLastScanned(assetId);
       setAssetInput("");
-      return;
+      inputRef.current?.focus();
+    } catch (err) {
+      setScanError(err instanceof ApiError && err.status === 404 ? "not_found" : "lookup_failed");
+      setAssetInput("");
     }
-
-    // Both Ok and Faulty items are eligible for Stock Out
-    setScannedItems((prev) => [...prev, { ...found, source: "scan" }]);
-    setLastScanned(assetId);
-    setAssetInput("");
-    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -228,6 +255,8 @@ export default function ScanItemsPage() {
         return "This item has already been issued and cannot be sold again.";
       case "duplicate_scan":
         return "This item has already been scanned in this session.";
+      case "lookup_failed":
+        return "Failed to look up this asset. Please try again.";
       default:
         return null;
     }

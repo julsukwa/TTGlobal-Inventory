@@ -7,11 +7,11 @@
 //
 // The Asset Information drawer follows the exact view/edit toggle pattern
 // used on ViewImportedInventoryPage: Asset ID / ID Source / Batch ID /
-// Shipment ID / Vendor ID / List Number / Import Date / Imported By are
-// protected (shown, never editable) since they preserve traceability back to
-// the import session; only the physical-spec fields and notes can change.
+// Shipment ID / Vendor ID / List Number / Import Date are protected (shown,
+// never editable) since they preserve traceability back to the import
+// session; only the physical-spec fields and notes can change.
 //
-// BACKEND INTEGRATION SEAM: see databaseTypes.ts for the planned endpoints.
+// Backed by the real /inventory API — see backend/src/inventory.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -29,8 +29,9 @@ import {
 } from "lucide-react";
 
 import "./DatabasePage.css";
-import { mockDatabase } from "./mockDatabase";
-import type { InventoryAsset } from "./databaseTypes";
+import { toInventoryAsset } from "./databaseTypes";
+import type { InventoryAsset, BackendInventoryItem, InventoryStats } from "./databaseTypes";
+import { apiFetch } from "../../services/api";
 
 import { StatusBadge, SearchBar, Pagination, Button, Modal } from "../../components/ui";
 
@@ -45,7 +46,32 @@ function buildSpecs(item: InventoryAsset): string {
 }
 
 export default function DatabasePage() {
-  const [inventory, setInventory] = useState<InventoryAsset[]>(mockDatabase);
+  // ── Stats (summary strip) ────────────────────────────────────────────────
+  const [stats, setStats] = useState<InventoryStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<InventoryStats>("/inventory/stats")
+      .then(setStats)
+      .catch((err: Error) => setStatsError(err.message));
+  }, []);
+
+  // Unfiltered snapshot — used only to derive stable filter dropdown options,
+  // independent of whatever's currently filtered in the table below.
+  const [allItems, setAllItems] = useState<InventoryAsset[]>([]);
+
+  useEffect(() => {
+    apiFetch<BackendInventoryItem[]>("/inventory")
+      .then((rows) => setAllItems(rows.map(toInventoryAsset)))
+      .catch(() => {
+        // Filter dropdowns just stay empty on failure — the main (filtered)
+        // fetch below still reports its own error if it fails.
+      });
+  }, []);
+
+  const [inventory, setInventory] = useState<InventoryAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -59,10 +85,14 @@ export default function DatabasePage() {
   const [selectedAsset, setSelectedAsset] = useState<InventoryAsset | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<InventoryAsset | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const openMenuRef = useRef<HTMLDivElement>(null);
   const [restoreTarget, setRestoreTarget] = useState<InventoryAsset | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   // Close the open three-dot menu on any click outside it — same pattern
   // used on StaffPage.
@@ -79,63 +109,82 @@ export default function DatabasePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId]);
 
-  // ── Filter option lists ──────────────────────────────────────────────────
+  // ── Filter option lists — derived from the unfiltered snapshot ──────────
 
   const categories = useMemo(
-    () => [...new Set(inventory.map((i) => i.category))].sort(),
-    [inventory]
+    () => [...new Set(allItems.map((i) => i.category))].sort(),
+    [allItems]
   );
-  const brands = useMemo(() => [...new Set(inventory.map((i) => i.brand))].sort(), [inventory]);
+  const brands = useMemo(() => [...new Set(allItems.map((i) => i.brand))].sort(), [allItems]);
   const vendors = useMemo(
-    () => [...new Set(inventory.map((i) => i.vendorId))].sort(),
-    [inventory]
+    () => [...new Set(allItems.map((i) => i.vendorId))].sort(),
+    [allItems]
   );
   const shipments = useMemo(
-    () => [...new Set(inventory.map((i) => i.shipmentId))].sort(),
-    [inventory]
+    () => [...new Set(allItems.map((i) => i.shipmentId))].sort(),
+    [allItems]
   );
 
-  // ── Summary figures ──────────────────────────────────────────────────────
+  // ── Summary figures — from GET /inventory/stats ──────────────────────────
 
-  const okCount = inventory.filter((i) => i.status === "Ok").length;
-  const faultyCount = inventory.filter((i) => i.status === "Faulty").length;
-  const issuedCount = inventory.filter((i) => i.status === "Issued").length;
+  const totalInventory = stats?.totalInventory ?? 0;
+  const okCount = stats?.okCount ?? 0;
+  const faultyCount = stats?.faultyCount ?? 0;
+  const issuedCount = stats?.issuedCount ?? 0;
 
-  // ── Filtering / pagination ───────────────────────────────────────────────
+  // ── Filtered fetch — search/category/brand/status/vendor/shipment/id
+  // source are all applied server-side. Debounced so typing in the search
+  // box doesn't fire a request per keystroke. ──────────────────────────────
 
-  const filteredAssets = inventory.filter((item) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      !search ||
-      item.assetId.toLowerCase().includes(search) ||
-      item.model.toLowerCase().includes(search) ||
-      item.batchId.toLowerCase().includes(search) ||
-      item.listNumber.toLowerCase().includes(search);
+  useEffect(() => {
+    let cancelled = false;
 
-    const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
-    const matchesBrand = brandFilter === "All" || item.brand === brandFilter;
-    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
-    const matchesVendor = vendorFilter === "All" || item.vendorId === vendorFilter;
-    const matchesShipment = shipmentFilter === "All" || item.shipmentId === shipmentFilter;
-    const matchesIdSource =
-      idSourceFilter === "All" ||
-      (idSourceFilter === "Generated" && item.assetIdSource === "generated") ||
-      (idSourceFilter === "Provided" && item.assetIdSource === "provided");
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
 
-    return (
-      matchesSearch &&
-      matchesCategory &&
-      matchesBrand &&
-      matchesStatus &&
-      matchesVendor &&
-      matchesShipment &&
-      matchesIdSource
-    );
-  });
+      const params = new URLSearchParams();
+      if (categoryFilter !== "All") params.set("category", categoryFilter);
+      if (brandFilter !== "All") params.set("brand", brandFilter);
+      if (statusFilter !== "All") params.set("status", statusFilter.toUpperCase());
+      if (vendorFilter !== "All") params.set("vendor", vendorFilter);
+      if (shipmentFilter !== "All") params.set("shipmentId", shipmentFilter);
+      if (idSourceFilter !== "All") {
+        params.set("assetIdSource", idSourceFilter === "Generated" ? "GENERATED" : "PROVIDED");
+      }
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      const query = params.toString();
 
-  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
+      apiFetch<BackendInventoryItem[]>(`/inventory${query ? `?${query}` : ""}`)
+        .then((rows) => {
+          if (!cancelled) setInventory(rows.map(toInventoryAsset));
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [categoryFilter, brandFilter, statusFilter, vendorFilter, shipmentFilter, idSourceFilter, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(inventory.length / ITEMS_PER_PAGE));
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedAssets = filteredAssets.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const paginatedAssets = inventory.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // Keeps a single row's state in sync everywhere it's cached (the current
+  // filtered table, the unfiltered dropdown snapshot, and an open drawer)
+  // after an edit or restore, without refetching either list from scratch.
+  const patchLocalItem = (updated: InventoryAsset) => {
+    setInventory((prev) => prev.map((i) => (i.assetId === updated.assetId ? updated : i)));
+    setAllItems((prev) => prev.map((i) => (i.assetId === updated.assetId ? updated : i)));
+    setSelectedAsset((prev) => (prev?.assetId === updated.assetId ? updated : prev));
+  };
 
   const handleClearFilters = () => {
     setSearchTerm("");
@@ -154,6 +203,7 @@ export default function DatabasePage() {
     setSelectedAsset(item);
     setIsEditing(false);
     setEditForm(null);
+    setSaveError(null);
     setOpenMenuId(null);
   };
 
@@ -161,6 +211,7 @@ export default function DatabasePage() {
     setSelectedAsset(item);
     setEditForm({ ...item });
     setIsEditing(true);
+    setSaveError(null);
     setOpenMenuId(null);
   };
 
@@ -168,17 +219,20 @@ export default function DatabasePage() {
     setSelectedAsset(null);
     setIsEditing(false);
     setEditForm(null);
+    setSaveError(null);
   };
 
   const handleStartEdit = () => {
     if (!selectedAsset) return;
     setEditForm({ ...selectedAsset });
     setIsEditing(true);
+    setSaveError(null);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm(null);
+    setSaveError(null);
   };
 
   const handleEditFieldChange = (field: keyof InventoryAsset, value: string) => {
@@ -186,12 +240,39 @@ export default function DatabasePage() {
     setEditForm({ ...editForm, [field]: value });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editForm) return;
-    setInventory((prev) => prev.map((i) => (i.assetId === editForm.assetId ? editForm : i)));
-    setSelectedAsset(editForm);
-    setIsEditing(false);
-    setEditForm(null);
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const updated = await apiFetch<BackendInventoryItem>(
+        `/inventory/${encodeURIComponent(editForm.assetId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            brand: editForm.brand,
+            model: editForm.model,
+            processor: editForm.processor,
+            generation: editForm.generation,
+            ram: editForm.ram,
+            storage: editForm.storage,
+            speed: editForm.speed,
+            screenType: editForm.screenType,
+            notes: editForm.notes,
+          }),
+        }
+      );
+
+      const mapped = toInventoryAsset(updated);
+      patchLocalItem(mapped);
+      setIsEditing(false);
+      setEditForm(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Placeholder — sticker printing isn't built yet (separate feature).
@@ -199,25 +280,32 @@ export default function DatabasePage() {
 
   // ── Restore to Ok ─────────────────────────────────────────────────────────
 
-  const handleConfirmRestore = () => {
+  const handleConfirmRestore = async () => {
     if (!restoreTarget) return;
-    const restored: InventoryAsset = { ...restoreTarget, status: "Ok", faultTypes: [] };
+    setRestoring(true);
+    setRestoreError(null);
 
-    setInventory((prev) => prev.map((i) => (i.assetId === restored.assetId ? restored : i)));
+    try {
+      const updated = await apiFetch<BackendInventoryItem>(
+        `/inventory/${encodeURIComponent(restoreTarget.assetId)}/restore`,
+        { method: "PATCH" }
+      );
 
-    if (selectedAsset?.assetId === restored.assetId) {
-      setSelectedAsset(restored);
+      patchLocalItem(toInventoryAsset(updated));
+      setRestoreTarget(null);
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Failed to restore item.");
+    } finally {
+      setRestoring(false);
     }
-
-    setRestoreTarget(null);
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
 
   const handleExportCsv = () => {
     const header =
-      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Screen Type,Status,Imported By,Import Date,Fault Types,Notes";
-    const lines = filteredAssets.map((item) => {
+      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Screen Type,Status,Import Date,Fault Types,Notes";
+    const lines = inventory.map((item) => {
       const cells = [
         item.assetId,
         item.assetIdSource,
@@ -235,7 +323,6 @@ export default function DatabasePage() {
         item.speed,
         item.screenType,
         item.status,
-        item.importedBy,
         item.importDate,
         item.faultTypes.join(" | "),
         item.notes,
@@ -279,6 +366,8 @@ export default function DatabasePage() {
         </div>
       </div>
 
+      {statsError && <p className="field-error">Failed to load statistics: {statsError}</p>}
+
       {/* ── Summary strip ─────────────────────────────────────────────────── */}
       <div className="db-summary-strip">
         <div className="db-summary-item">
@@ -287,7 +376,7 @@ export default function DatabasePage() {
           </div>
           <div>
             <span>Total Inventory</span>
-            <h3>{inventory.length}</h3>
+            <h3>{stats ? totalInventory : "—"}</h3>
           </div>
         </div>
 
@@ -297,7 +386,7 @@ export default function DatabasePage() {
           </div>
           <div>
             <span>Available (Ok)</span>
-            <h3>{okCount}</h3>
+            <h3>{stats ? okCount : "—"}</h3>
           </div>
         </div>
 
@@ -307,7 +396,7 @@ export default function DatabasePage() {
           </div>
           <div>
             <span>Faulty</span>
-            <h3>{faultyCount}</h3>
+            <h3>{stats ? faultyCount : "—"}</h3>
           </div>
         </div>
 
@@ -317,7 +406,7 @@ export default function DatabasePage() {
           </div>
           <div>
             <span>Issued</span>
-            <h3>{issuedCount}</h3>
+            <h3>{stats ? issuedCount : "—"}</h3>
           </div>
         </div>
       </div>
@@ -428,7 +517,7 @@ export default function DatabasePage() {
 
       {/* ── Results count ─────────────────────────────────────────────────── */}
       <p className="db-results-count">
-        Showing {filteredAssets.length} of {inventory.length} results
+        Showing {inventory.length} of {stats ? totalInventory : inventory.length} results
       </p>
 
       {/* ── Table ─────────────────────────────────────────────────────────── */}
@@ -451,7 +540,19 @@ export default function DatabasePage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedAssets.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={11} className="db-empty-row">
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={11} className="db-empty-row">
+                    Failed to load inventory: {error}
+                  </td>
+                </tr>
+              ) : paginatedAssets.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="db-empty-row">
                     No inventory records match your search/filters.
@@ -465,25 +566,25 @@ export default function DatabasePage() {
                         <span className="db-asset-id">{item.assetId}</span>
                         <span
                           className={`db-letter-badge ${
-                            item.assetIdSource === "provided"
+                            item.assetIdSource === "Provided"
                               ? "db-letter-badge-grey"
                               : "db-letter-badge-blue"
                           }`}
-                          title={item.assetIdSource === "provided" ? "Provided" : "Generated"}
+                          title={item.assetIdSource}
                         >
-                          {item.assetIdSource === "provided" ? "P" : "G"}
+                          {item.assetIdSource === "Provided" ? "P" : "G"}
                         </span>
                       </span>
                     </td>
                     <td>
                       <span
                         className={`db-source-pill ${
-                          item.assetIdSource === "provided"
+                          item.assetIdSource === "Provided"
                             ? "db-source-provided"
                             : "db-source-generated"
                         }`}
                       >
-                        {item.assetIdSource === "provided" ? "Provided" : "Generated"}
+                        {item.assetIdSource}
                       </span>
                     </td>
                     <td>{item.listNumber}</td>
@@ -540,6 +641,7 @@ export default function DatabasePage() {
                                   className="db-menu-restore"
                                   onClick={() => {
                                     setRestoreTarget(item);
+                                    setRestoreError(null);
                                     setOpenMenuId(null);
                                   }}
                                 >
@@ -561,9 +663,9 @@ export default function DatabasePage() {
 
         <div className="db-footer">
           <span>
-            Showing {filteredAssets.length === 0 ? 0 : startIndex + 1}–
-            {Math.min(startIndex + ITEMS_PER_PAGE, filteredAssets.length)} of{" "}
-            {filteredAssets.length} entries
+            Showing {inventory.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, inventory.length)} of{" "}
+            {inventory.length} entries
           </span>
           <Pagination
             currentPage={currentPage}
@@ -600,12 +702,12 @@ export default function DatabasePage() {
                     <span>ID Source</span>
                     <span
                       className={`db-source-pill ${
-                        selectedAsset.assetIdSource === "provided"
+                        selectedAsset.assetIdSource === "Provided"
                           ? "db-source-provided"
                           : "db-source-generated"
                       }`}
                     >
-                      {selectedAsset.assetIdSource === "provided" ? "Provided" : "Generated"}
+                      {selectedAsset.assetIdSource}
                     </span>
                   </div>
                   <div>
@@ -753,10 +855,6 @@ export default function DatabasePage() {
                     <p className="db-drawer-mono">{selectedAsset.batchId}</p>
                   </div>
                   <div>
-                    <span>Imported By</span>
-                    <p>{selectedAsset.importedBy}</p>
-                  </div>
-                  <div>
                     <span>Import Date</span>
                     <p>{selectedAsset.importDate}</p>
                   </div>
@@ -798,6 +896,8 @@ export default function DatabasePage() {
                   </div>
                 </div>
               )}
+
+              {isEditing && saveError && <p className="field-error">{saveError}</p>}
             </div>
 
             <div className="db-drawer-footer">
@@ -814,11 +914,11 @@ export default function DatabasePage() {
                 </>
               ) : (
                 <>
-                  <Button variant="secondary" onClick={handleCancelEdit}>
+                  <Button variant="secondary" onClick={handleCancelEdit} disabled={saving}>
                     Cancel
                   </Button>
-                  <Button variant="primary" onClick={handleSaveEdit}>
-                    Save Changes
+                  <Button variant="primary" onClick={handleSaveEdit} disabled={saving}>
+                    {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </>
               )}
@@ -840,12 +940,13 @@ export default function DatabasePage() {
               Are you sure you want to restore <strong>{restoreTarget.assetId}</strong> to Ok
               status? The fault record will be cleared.
             </p>
+            {restoreError && <p className="field-error">{restoreError}</p>}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setRestoreTarget(null)}>
+              <Button variant="secondary" onClick={() => setRestoreTarget(null)} disabled={restoring}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleConfirmRestore}>
-                Confirm Restore
+              <Button variant="primary" onClick={handleConfirmRestore} disabled={restoring}>
+                {restoring ? "Restoring..." : "Confirm Restore"}
               </Button>
             </div>
           </>

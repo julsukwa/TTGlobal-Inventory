@@ -6,6 +6,7 @@ import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { DropdownsModule } from './dropdowns/dropdowns.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StaffModule } from './staff/staff.module.js';
@@ -31,6 +32,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     VendorsModule,
     CustomersModule,
     ShipmentsModule,
+    InventoryModule,
     StaffModule,
     StockInModule,
     StockOutModule,

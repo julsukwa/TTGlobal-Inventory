@@ -5,15 +5,21 @@
 // fault types, restore to Ok); Warranty Officer gets read-only access — see
 // isReadOnly below, driven by the "faultyStock" module in permissions.ts.
 //
-// BACKEND INTEGRATION SEAM: see faultyStockTypes.ts for the planned endpoints.
+// Backed by the real /inventory?status=FAULTY endpoint. Only status and the
+// search box are sent server-side — the backend has no batchId/fault-type/
+// model filters, so those three stay applied client-side on top of whatever
+// the server returns, the same way ViewImportedInventoryPage layers its
+// unsupported "condition" filter on top of its server-filtered results.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, Pencil, Printer, RotateCcw, X, AlertTriangle, AlertOctagon, Layers } from "lucide-react";
 
 import "./FaultyStockPage.css";
-import { mockFaultyStock } from "./mockFaultyStock";
+import { toFaultyStockItem } from "./faultyStockTypes";
 import type { FaultyStockItem } from "./faultyStockTypes";
+import type { BackendInventoryItem } from "../database/databaseTypes";
 import { dropdownValues } from "../dropdowns/mockDropdown";
+import { apiFetch } from "../../services/api";
 
 import { SearchBar, Pagination, Button, Modal } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -30,7 +36,7 @@ function buildSpecs(item: FaultyStockItem): string {
   );
 }
 
-/** Splits the mock "DD/MM/YYYY hh:mm AM/PM" string into its date and time
+/** Splits the "DD/MM/YYYY hh:mm AM/PM" display string into its date and time
  * halves so the table/drawer can render them on separate lines. */
 function splitDateMarked(value: string): { date: string; time: string } {
   const [datePart, ...rest] = value.split(" ");
@@ -41,7 +47,9 @@ export default function FaultyStockPage() {
   const { user } = useAuth();
   const isReadOnly = !user || !canEdit(user.role, "faultyStock");
 
-  const [faultyStock, setFaultyStock] = useState<FaultyStockItem[]>(mockFaultyStock);
+  const [faultyStock, setFaultyStock] = useState<FaultyStockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [batchFilter, setBatchFilter] = useState("All");
@@ -57,6 +65,38 @@ export default function FaultyStockPage() {
   const [editError, setEditError] = useState("");
 
   const [restoreTarget, setRestoreTarget] = useState<FaultyStockItem | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  // ── Fetch — status=FAULTY always applied; search is debounced server-side. ─
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams({ status: "FAULTY" });
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+
+      apiFetch<BackendInventoryItem[]>(`/inventory?${params.toString()}`)
+        .then((rows) => {
+          if (!cancelled) setFaultyStock(rows.map(toFaultyStockItem));
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchTerm]);
 
   // ── Filter option lists ──────────────────────────────────────────────────
 
@@ -93,21 +133,14 @@ export default function FaultyStockPage() {
     [faultyStock]
   );
 
-  // ── Filtering / pagination ───────────────────────────────────────────────
+  // ── Client-side filtering (batch/fault/model — unsupported server-side) ──
 
   const filteredItems = faultyStock.filter((item) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      !search ||
-      [item.assetId, item.model, item.processor, item.ram, item.storage].some((field) =>
-        field.toLowerCase().includes(search)
-      );
-
     const matchesBatch = batchFilter === "All" || item.batchId === batchFilter;
     const matchesFault = faultFilter === "All" || item.faultTypes.includes(faultFilter);
     const matchesModel = modelFilter === "All" || item.model === modelFilter;
 
-    return matchesSearch && matchesBatch && matchesFault && matchesModel;
+    return matchesBatch && matchesFault && matchesModel;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
@@ -153,6 +186,9 @@ export default function FaultyStockPage() {
     setEditError("");
   };
 
+  // TODO: wire up to the Adjustments endpoint once it exists (it doesn't
+  // yet) — that's what should actually persist a fault-type/notes change.
+  // Until then this only updates local state so the modal UI keeps working.
   const handleSaveEditFault = () => {
     if (!editTarget) return;
     if (editFaultTypes.length === 0) {
@@ -172,16 +208,28 @@ export default function FaultyStockPage() {
 
   // ── Restore to Ok ─────────────────────────────────────────────────────────
 
-  const handleConfirmRestore = () => {
+  const handleConfirmRestore = async () => {
     if (!restoreTarget) return;
+    setRestoring(true);
+    setRestoreError(null);
 
-    setFaultyStock((prev) => prev.filter((i) => i.assetId !== restoreTarget.assetId));
+    try {
+      await apiFetch(`/inventory/${encodeURIComponent(restoreTarget.assetId)}/restore`, {
+        method: "PATCH",
+      });
 
-    if (selectedItem?.assetId === restoreTarget.assetId) {
-      setSelectedItem(null);
+      setFaultyStock((prev) => prev.filter((i) => i.assetId !== restoreTarget.assetId));
+
+      if (selectedItem?.assetId === restoreTarget.assetId) {
+        setSelectedItem(null);
+      }
+
+      setRestoreTarget(null);
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Failed to restore item.");
+    } finally {
+      setRestoring(false);
     }
-
-    setRestoreTarget(null);
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -286,7 +334,7 @@ export default function FaultyStockPage() {
             setSearchTerm(value);
             setCurrentPage(1);
           }}
-          placeholder="Search by asset ID, model or specs..."
+          placeholder="Search by asset ID, model or list number..."
           width={280}
         />
 
@@ -356,7 +404,19 @@ export default function FaultyStockPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedItems.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="fs-empty-row">
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="fs-empty-row">
+                    Failed to load faulty stock: {error}
+                  </td>
+                </tr>
+              ) : paginatedItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="fs-empty-row">
                     No faulty items match your search/filters.
@@ -421,7 +481,10 @@ export default function FaultyStockPage() {
                             <button
                               className="fs-action-btn"
                               title="Restore to Ok"
-                              onClick={() => setRestoreTarget(item)}
+                              onClick={() => {
+                                setRestoreTarget(item);
+                                setRestoreError(null);
+                              }}
                             >
                               <RotateCcw size={14} />
                             </button>
@@ -574,7 +637,13 @@ export default function FaultyStockPage() {
                   <Pencil size={14} />
                   Edit Fault
                 </Button>
-                <Button variant="primary" onClick={() => setRestoreTarget(selectedItem)}>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setRestoreTarget(selectedItem);
+                    setRestoreError(null);
+                  }}
+                >
                   <RotateCcw size={14} />
                   Restore to Ok
                 </Button>
@@ -657,12 +726,13 @@ export default function FaultyStockPage() {
               status? This item will be removed from the Faulty Stock list and its fault record
               will be cleared.
             </p>
+            {restoreError && <span className="field-error">{restoreError}</span>}
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setRestoreTarget(null)}>
+              <Button variant="secondary" onClick={() => setRestoreTarget(null)} disabled={restoring}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleConfirmRestore}>
-                Confirm Restore
+              <Button variant="primary" onClick={handleConfirmRestore} disabled={restoring}>
+                {restoring ? "Restoring..." : "Confirm Restore"}
               </Button>
             </div>
           </>
