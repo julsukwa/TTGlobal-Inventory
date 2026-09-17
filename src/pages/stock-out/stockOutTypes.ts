@@ -10,11 +10,11 @@
 // directly to the physical invoice and is required to be unique per transaction.
 // No separate system-generated Transaction ID is needed or used.
 //
-// BACKEND INTEGRATION SEAM:
-//   POST /stock-out          → create transaction, returns StockOutTransaction
-//   GET  /stock-out          → list all transactions
-//   GET  /stock-out/:invoiceNumber → single transaction detail
-//   GET  /inventory/:assetId → lookup single asset for scanning validation
+// Backed by the real /stock-out API. See StockOutApiTransaction/StockOutApiItem
+// below for the exact shape the backend returns (uppercase OK/FAULTY status,
+// no per-item shipmentId) — displayItemStatus() bridges that to the
+// "Ok"/"Faulty" display strings ScannedItem/StockOutItemStatus use everywhere
+// pre-commit (the scanning session, review, and bulk-add lookups).
 
 export type StockOutItemStatus = "Ok" | "Faulty";
 
@@ -36,9 +36,56 @@ export interface ScannedItem {
   screenType: string;
   status: StockOutItemStatus; // original status before issuing
   batchId: string;
-  shipmentId: string;
+  // No longer needed to group by shipment client-side — the backend's bulk
+  // lookup endpoints do that server-side and return a shipment id/name/vendor
+  // directly for disambiguation. Kept optional (rather than removed) since
+  // ScanItemsPage's individual-scan path still sources from mock data shaped
+  // with it, and nothing downstream reads it.
+  shipmentId?: string;
   source: ScannedItemSource; // how this item was added
   listNumber: string; // the list number this item belongs to
+}
+
+// ─── Backend transaction shape ──────────────────────────────────────────────
+// Exactly what GET/POST /stock-out return — see backend/src/stock-out. Status
+// is the uppercase Prisma enum value (the item's *prior* status before being
+// issued); displayItemStatus() below converts it to "Ok"/"Faulty" for display.
+
+export type BackendItemStatus = "OK" | "FAULTY";
+
+export function displayItemStatus(status: BackendItemStatus): StockOutItemStatus {
+  return status === "FAULTY" ? "Faulty" : "Ok";
+}
+
+export interface StockOutApiItem {
+  assetId: string;
+  category: string;
+  brand: string;
+  model: string;
+  processor: string;
+  generation: string;
+  ram: string;
+  storage: string;
+  speed: string;
+  screenType: string;
+  status: BackendItemStatus;
+  listNumber: string;
+  batchId: string;
+  source: ScannedItemSource;
+}
+
+export interface StockOutApiTransaction {
+  invoiceNumber: string;
+  customerId: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerLocation: string;
+  notes: string;
+  date: string; // DD/MM/YYYY
+  processedBy: string;
+  totalItems: number;
+  items: StockOutApiItem[];
 }
 
 export interface StockOutTransaction {

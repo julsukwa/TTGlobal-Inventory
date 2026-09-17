@@ -12,18 +12,23 @@ import {
 
 import "./ScanItemsPage.css";
 import { mockInventoryPool } from "./mockStockOut";
-import type { ScannedItem, ScannedItemSource, Customer } from "./stockOutTypes";
+import type {
+  ScannedItem,
+  ScannedItemSource,
+  Customer,
+  BackendItemStatus,
+} from "./stockOutTypes";
+import { displayItemStatus } from "./stockOutTypes";
+import { apiFetch, ApiError } from "../../services/api";
 import { Modal, Button } from "../../components/ui";
 
-// BACKEND INTEGRATION SEAM:
-// Asset lookup on scan: GET /inventory/:assetId
-// Returns the item if it exists and is status Ok or Faulty, errors otherwise.
+// BACKEND INTEGRATION SEAM: individual asset lookup needs GET /inventory/:assetId
+// endpoint — to be built in the inventory/database module. For now keep the
+// mock inventory pool lookup for individual scans only.
 //
-// The two bulk-add methods below (List Number, Batch ID) will eventually
-// call their own lookup endpoints too:
-//   GET /inventory?listNumber=:listNumber
-//   GET /inventory?batchId=:batchId
-// both scoped to status Ok/Faulty and not-yet-issued, same as the scan path.
+// The two bulk-add methods below (List Number, Batch ID) ARE wired to the
+// real API: GET /stock-out/lookup/list-number and GET /stock-out/lookup/batch
+// — both already scoped server-side to status OK/FAULTY and not-yet-issued.
 
 interface LocationState {
   customer: Customer;
@@ -41,16 +46,40 @@ type ScanError =
  * to, so feedback renders under the right input. */
 type BulkTarget = "list" | "batch";
 
-interface ShipmentOption {
-  shipmentId: string;
-  vendor: string;
-  items: ScannedItem[];
+// Raw inventory row shape returned by the bulk lookup endpoints — see
+// backend/src/stock-out/stock-out.service.ts getLookupByListNumber(AndShipment)
+// and getLookupByBatch, which return plain Prisma InventoryItem records.
+interface BackendInventoryItem {
+  assetId: string;
+  listNumber: string;
+  batchId: string; // human-readable batch code string from the backend
+  shipmentId: number;
+  category: string;
+  brand: string;
+  model: string;
+  processor: string;
+  generation: string;
+  ram: string;
+  storage: string;
+  speed: string;
+  screenType: string;
+  status: BackendItemStatus;
 }
+
+interface ShipmentOption {
+  shipmentId: number;
+  shipmentName: string;
+  vendorId: string;
+  eligibleCount: number;
+}
+
+type ListNumberLookupResponse =
+  | { requiresDisambiguation: false; items: BackendInventoryItem[] }
+  | { requiresDisambiguation: true; shipments: ShipmentOption[] };
 
 interface DisambiguationState {
   listNumber: string;
   options: ShipmentOption[];
-  skippedCount: number;
 }
 
 interface PendingFaultyAdd {
@@ -60,18 +89,38 @@ interface PendingFaultyAdd {
   target: BulkTarget;
 }
 
-/** Batch IDs in this system follow ShipmentID-VendorID-YY-NNNN (see
- * mockDatabase.ts) — pulling the vendor segment out of it avoids needing a
- * separate vendor field/lookup just for the disambiguation modal. */
-function extractVendorFromBatchId(batchId: string): string {
-  const parts = batchId.split("-");
-  return parts.length >= 2 ? parts[1] : "—";
+/**
+ * Maps a raw backend InventoryItem into the frontend's ScannedItem shape.
+ * `source` is a placeholder here — finalizeAdd always overwrites it with the
+ * real source when the item is actually added to the session.
+ *
+ * batchId is the human-readable batch code string from the backend
+ */
+function toScannedItem(item: BackendInventoryItem, shipmentIdOverride?: string): ScannedItem {
+  return {
+    assetId: item.assetId,
+    category: item.category,
+    brand: item.brand,
+    model: item.model,
+    processor: item.processor,
+    generation: item.generation,
+    ram: item.ram,
+    storage: item.storage,
+    speed: item.speed,
+    screenType: item.screenType,
+    status: displayItemStatus(item.status),
+    batchId: item.batchId,
+    shipmentId: shipmentIdOverride ?? String(item.shipmentId),
+    source: "scan",
+    listNumber: item.listNumber,
+  };
 }
 
 // The mock inventory pool can only ever contain "Ok" | "Faulty" items (see
 // StockOutItemStatus) — a real inventory endpoint could still hand back a
 // stale "Issued" row, so this filter is kept (and type-cast) defensively
-// rather than assumed away.
+// rather than assumed away. The bulk lookup endpoints already exclude
+// ISSUED items server-side, so this is a no-op for API-sourced items.
 function isIssuedStatus(item: ScannedItem): boolean {
   return (item.status as string) === "Issued";
 }
@@ -241,84 +290,110 @@ export default function ScanItemsPage() {
 
   // ── Method 2 — Bulk Add by List Number ───────────────────────────────────
 
-  const handleAddByListNumber = () => {
+  const handleAddByListNumber = async () => {
     const query = listNumberInput.trim();
     setListError(null);
     setListSkipped(null);
     if (!query) return;
 
-    const matches = mockInventoryPool.filter(
-      (item) => item.listNumber.trim().toLowerCase() === query.toLowerCase()
-    );
-
-    if (matches.length === 0) {
-      setListError(`No items found for list number ${query}`);
-      return;
-    }
-
-    const { eligible, skippedCount } = filterEligible(matches);
-
-    if (eligible.length === 0) {
-      setListError(
-        `All items in list ${query} have already been issued or added to this session`
+    try {
+      const response = await apiFetch<ListNumberLookupResponse>(
+        `/stock-out/lookup/list-number?listNumber=${encodeURIComponent(query)}`
       );
-      return;
+
+      if (response.requiresDisambiguation) {
+        setDisambiguation({ listNumber: query, options: response.shipments });
+        return;
+      }
+
+      if (response.items.length === 0) {
+        setListError(`No items found for list number ${query}`);
+        return;
+      }
+
+      const matches = response.items.map((item) => toScannedItem(item));
+      const { eligible, skippedCount } = filterEligible(matches);
+
+      if (eligible.length === 0) {
+        setListError(
+          `All items in list ${query} have already been issued or added to this session`
+        );
+        return;
+      }
+
+      resolveAdd(eligible, "list-number", skippedCount, "list");
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : "Failed to look up list number.");
     }
-
-    const uniqueShipmentIds = [...new Set(eligible.map((item) => item.shipmentId))];
-
-    if (uniqueShipmentIds.length > 1) {
-      const options: ShipmentOption[] = uniqueShipmentIds.map((shipmentId) => {
-        const items = eligible.filter((item) => item.shipmentId === shipmentId);
-        return {
-          shipmentId,
-          vendor: extractVendorFromBatchId(items[0].batchId),
-          items,
-        };
-      });
-      setDisambiguation({ listNumber: query, options, skippedCount });
-      return;
-    }
-
-    resolveAdd(eligible, "list-number", skippedCount, "list");
   };
 
-  const handleSelectShipment = (option: ShipmentOption) => {
+  const handleSelectShipment = async (option: ShipmentOption) => {
     if (!disambiguation) return;
-    const { skippedCount } = disambiguation;
+    const { listNumber } = disambiguation;
     setDisambiguation(null);
-    resolveAdd(option.items, "list-number", skippedCount, "list");
+    setListError(null);
+
+    try {
+      const items = await apiFetch<BackendInventoryItem[]>(
+        `/stock-out/lookup/list-number?listNumber=${encodeURIComponent(listNumber)}&shipmentId=${option.shipmentId}`
+      );
+
+      const matches = items.map((item) => toScannedItem(item, String(option.shipmentId)));
+      const { eligible, skippedCount } = filterEligible(matches);
+
+      if (eligible.length === 0) {
+        setListError(
+          `All items in this shipment have already been issued or added to this session`
+        );
+        return;
+      }
+
+      resolveAdd(eligible, "list-number", skippedCount, "list");
+    } catch (err) {
+      setListError(
+        err instanceof Error ? err.message : "Failed to load items for the selected shipment."
+      );
+    }
   };
 
   // ── Method 3 — Bulk Add by Batch ID ──────────────────────────────────────
 
-  const handleAddByBatchId = () => {
+  const handleAddByBatchId = async () => {
     const query = batchIdInput.trim();
     setBatchError(null);
     setBatchSkipped(null);
     if (!query) return;
 
-    const matches = mockInventoryPool.filter(
-      (item) => item.batchId.trim().toLowerCase() === query.toLowerCase()
-    );
-
-    if (matches.length === 0) {
-      setBatchError(`No items found for Batch ID ${query}`);
-      return;
-    }
-
-    const { eligible, skippedCount } = filterEligible(matches);
-
-    if (eligible.length === 0) {
-      setBatchError(
-        `All items in batch ${query} have already been issued or added to this session`
+    try {
+      const items = await apiFetch<BackendInventoryItem[]>(
+        `/stock-out/lookup/batch?batchId=${encodeURIComponent(query)}`
       );
-      return;
-    }
 
-    // Batch ID is globally unique to one shipment/import session, so there's
-    // never a disambiguation step here.
-    resolveAdd(eligible, "batch", skippedCount, "batch");
+      if (items.length === 0) {
+        setBatchError(`No items found for Batch ID ${query}`);
+        return;
+      }
+
+      const matches = items.map((item) => toScannedItem(item));
+      const { eligible, skippedCount } = filterEligible(matches);
+
+      if (eligible.length === 0) {
+        setBatchError(
+          `All items in batch ${query} have already been issued or added to this session`
+        );
+        return;
+      }
+
+      // Batch ID is globally unique to one shipment/import session, so there's
+      // never a disambiguation step here.
+      resolveAdd(eligible, "batch", skippedCount, "batch");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setBatchError(`No items found for Batch ID ${query}`);
+      } else {
+        setBatchError(err instanceof Error ? err.message : "Failed to look up batch ID.");
+      }
+    }
   };
 
   // ── Unified Bulk Add form ─────────────────────────────────────────────────
@@ -661,10 +736,10 @@ export default function ScanItemsPage() {
               {disambiguation.options.map((option) => (
                 <div key={option.shipmentId} className="scan-shipment-option">
                   <div>
-                    <strong>{option.shipmentId}</strong>
-                    <span> · {option.vendor}</span>
+                    <strong>{option.shipmentName}</strong>
+                    <span> · {option.vendorId}</span>
                     <p>
-                      {option.items.length} eligible item{option.items.length !== 1 ? "s" : ""}
+                      {option.eligibleCount} eligible item{option.eligibleCount !== 1 ? "s" : ""}
                     </p>
                   </div>
                   <Button variant="primary" onClick={() => handleSelectShipment(option)}>

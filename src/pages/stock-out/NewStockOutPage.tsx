@@ -1,14 +1,35 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, User, ChevronDown } from "lucide-react";
 
 import "./NewStockOutPage.css";
-import mockCustomers from "../customers/mockCustomers";
 import type { Customer } from "./stockOutTypes";
+import { apiFetch } from "../../services/api";
 
-// BACKEND INTEGRATION SEAM:
-// Customer search: GET /customers?search=:query
-// On confirm navigate to scanning workspace passing state, not a DB write yet.
+// On confirm navigate to scanning workspace passing state, not a DB write yet
+// — the transaction is only committed once the operator confirms on the
+// review page (see ReviewStockOutPage.tsx).
+
+interface BackendCustomer {
+  id: number;
+  fullName: string;
+  email: string;
+  phone: string;
+  location: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toCustomer(customer: BackendCustomer): Customer {
+  return {
+    id: customer.id,
+    name: customer.fullName,
+    email: customer.email,
+    phone: customer.phone,
+    location: customer.location,
+    dateAdded: new Date(customer.createdAt).toLocaleDateString("en-GB"),
+  };
+}
 
 export default function NewStockOutPage() {
   const navigate = useNavigate();
@@ -20,18 +41,37 @@ export default function NewStockOutPage() {
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<{ customer?: string; invoice?: string }>({});
 
-  const customers: Customer[] = mockCustomers;
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [searching, setSearching] = useState(false);
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers;
-    const s = customerSearch.toLowerCase();
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(s) ||
-        c.email.toLowerCase().includes(s) ||
-        c.phone.includes(s)
-    );
-  }, [customerSearch, customers]);
+  // Fetches on mount (customerSearch starts empty, so this loads the full
+  // list) and again, debounced, on every keystroke — the backend matches
+  // fullName/email/phone.
+  useEffect(() => {
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setSearching(true);
+      const query = customerSearch.trim();
+      const endpoint = query ? `/customers?search=${encodeURIComponent(query)}` : "/customers";
+
+      apiFetch<BackendCustomer[]>(endpoint)
+        .then((data) => {
+          if (!cancelled) setFilteredCustomers(data.map(toCustomer));
+        })
+        .catch(() => {
+          if (!cancelled) setFilteredCustomers([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [customerSearch]);
 
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -129,7 +169,9 @@ export default function NewStockOutPage() {
 
               {showDropdown && customerSearch.length > 0 && (
                 <div className="nso-customer-dropdown">
-                  {filteredCustomers.length === 0 ? (
+                  {searching ? (
+                    <div className="nso-dropdown-empty">Searching...</div>
+                  ) : filteredCustomers.length === 0 ? (
                     <div className="nso-dropdown-empty">No customers found.</div>
                   ) : (
                     filteredCustomers.map((c) => (

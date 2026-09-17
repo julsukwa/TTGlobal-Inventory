@@ -1,13 +1,10 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, User, Package } from "lucide-react";
 
 import "./ReviewStockOutPage.css";
-import type { ScannedItem, Customer } from "./stockOutTypes";
-
-// BACKEND INTEGRATION SEAM:
-// On confirm: POST /stock-out with { customerId, invoiceNumber, notes, assetIds[] }
-// Server atomically marks all items Issued and creates the transaction record.
+import type { ScannedItem, Customer, StockOutApiTransaction } from "./stockOutTypes";
+import { apiFetch } from "../../services/api";
 
 interface LocationState {
   customer: Customer;
@@ -20,6 +17,9 @@ export default function ReviewStockOutPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
+
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!state?.customer || !state?.items?.length) {
@@ -49,18 +49,30 @@ export default function ReviewStockOutPage() {
     return "Scan";
   };
 
-  const handleConfirm = () => {
-    // BACKEND INTEGRATION SEAM:
-    // POST /stock-out → { customerId, invoiceNumber, notes, assetIds }
-    // On success navigate to completion passing the confirmed transaction data.
-    // The invoiceNumber is the unique identifier — no separate transaction ID needed.
-    navigate("/stock-out/complete", {
-      state: {
-        ...state,
-        date: new Date().toLocaleDateString("en-GB"),
-        processedBy: "Admin",
-      },
-    });
+  const handleConfirm = async () => {
+    setConfirmError(null);
+    setConfirming(true);
+
+    try {
+      const transaction = await apiFetch<StockOutApiTransaction>("/stock-out", {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: state.customer.id,
+          invoiceNumber: state.invoiceNumber,
+          notes: state.notes,
+          items: state.items.map((item) => ({ assetId: item.assetId, source: item.source })),
+        }),
+      });
+
+      // The invoiceNumber is the unique identifier — no separate transaction
+      // ID needed. Navigate with the server's response, which already has
+      // the real date/processedBy/status values, not client-guessed ones.
+      navigate("/stock-out/complete", { state: transaction });
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Failed to confirm stock out.");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -221,16 +233,19 @@ export default function ReviewStockOutPage() {
         </p>
       </div>
 
+      {confirmError && <p className="field-error">{confirmError}</p>}
+
       {/* ── Actions ──────────────────────────────────────────────────────────── */}
       <div className="rev-actions">
         <button
           className="rev-cancel-btn"
           onClick={() => navigate("/stock-out")}
+          disabled={confirming}
         >
           Cancel
         </button>
-        <button className="rev-confirm-btn" onClick={handleConfirm}>
-          Confirm Stock Out →
+        <button className="rev-confirm-btn" onClick={handleConfirm} disabled={confirming}>
+          {confirming ? "Confirming..." : "Confirm Stock Out →"}
         </button>
       </div>
     </div>

@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StaffModule } from './staff/staff.module.js';
 import { StockInModule } from './stock-in/stock-in.module.js';
+import { StockOutModule } from './stock-out/stock-out.module.js';
 import { VendorsModule } from './vendors/vendors.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -32,6 +33,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ShipmentsModule,
     StaffModule,
     StockInModule,
+    StockOutModule,
   ],
   controllers: [AppController],
   providers: [AppService],

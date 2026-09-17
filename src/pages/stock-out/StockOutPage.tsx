@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -10,18 +10,52 @@ import {
 } from "lucide-react";
 
 import "./StockOutPage.css";
-import { mockStockOutTransactions } from "./mockStockOut";
-import type { StockOutTransaction } from "./stockOutTypes";
+import type { StockOutApiTransaction } from "./stockOutTypes";
+import { displayItemStatus } from "./stockOutTypes";
+import { apiFetch } from "../../services/api";
 
 export default function StockOutPage() {
   const navigate = useNavigate();
 
-  const [transactions] = useState<StockOutTransaction[]>(
-    mockStockOutTransactions
-  );
+  const [transactions, setTransactions] = useState<StockOutApiTransaction[]>([]);
+  const [yearTransactions, setYearTransactions] = useState<StockOutApiTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTransaction, setSelectedTransaction] =
-    useState<StockOutTransaction | null>(null);
+    useState<StockOutApiTransaction | null>(null);
+
+  const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      apiFetch<StockOutApiTransaction[]>("/stock-out"),
+      apiFetch<StockOutApiTransaction[]>(`/stock-out?year=${currentYear}`),
+    ])
+      .then(([all, yearly]) => {
+        if (cancelled) return;
+        setTransactions(all);
+        setYearTransactions(yearly);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // currentYear is derived from Date.now() at mount and intentionally not
+    // re-evaluated — this page doesn't need to refetch mid-session if the
+    // real-world year rolls over while it's open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = transactions.filter((t) => {
     const s = searchTerm.toLowerCase();
@@ -31,7 +65,7 @@ export default function StockOutPage() {
     );
   });
 
-  const buildSpecsString = (item: StockOutTransaction["items"][number]) => {
+  const buildSpecsString = (item: StockOutApiTransaction["items"][number]) => {
     const parts = [
       item.processor,
       item.generation,
@@ -41,14 +75,6 @@ export default function StockOutPage() {
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(" • ") : "—";
   };
-
-  const currentYear = new Date().getFullYear();
-
-  // Filter transactions to the current calendar year for the summary cards.
-  // Date format in mock data is DD/MM/YYYY — extract the year from the last 4 chars.
-  const thisYearTransactions = transactions.filter((t) =>
-    t.date.slice(-4) === String(currentYear)
-  );
 
   return (
     <div className="so-page">
@@ -75,7 +101,7 @@ export default function StockOutPage() {
           </div>
           <div>
             <span>Total Transactions</span>
-            <h3>{thisYearTransactions.length}</h3>
+            <h3>{yearTransactions.length}</h3>
             <p>Jan – Dec {currentYear}</p>
           </div>
         </div>
@@ -85,7 +111,7 @@ export default function StockOutPage() {
           </div>
           <div>
             <span>Items Issued</span>
-            <h3>{thisYearTransactions.reduce((acc, t) => acc + t.totalItems, 0)}</h3>
+            <h3>{yearTransactions.reduce((acc, t) => acc + t.totalItems, 0)}</h3>
             <p>Jan – Dec {currentYear}</p>
           </div>
         </div>
@@ -117,7 +143,19 @@ export default function StockOutPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="so-empty">
+                  Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={6} className="so-empty">
+                  Failed to load transactions: {error}
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="so-empty">
                   {transactions.length === 0
@@ -271,12 +309,12 @@ export default function StockOutPage() {
                       <div className="so-drawer-item-right">
                         <span
                           className={`so-status-pill ${
-                            item.status === "Ok"
+                            item.status === "OK"
                               ? "so-status-ok"
                               : "so-status-faulty"
                           }`}
                         >
-                          {item.status}
+                          {displayItemStatus(item.status)}
                         </span>
                         <span className="so-drawer-category">{item.category}</span>
                       </div>

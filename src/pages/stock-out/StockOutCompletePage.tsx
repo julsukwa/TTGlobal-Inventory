@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 
 import "./StockOutCompletePage.css";
-import type { ScannedItem, Customer } from "./stockOutTypes";
+import type { StockOutApiItem, StockOutApiTransaction } from "./stockOutTypes";
+import { displayItemStatus } from "./stockOutTypes";
 
 // BACKEND INTEGRATION SEAM:
 // Delivery note PDF: GET /stock-out/:invoiceNumber/delivery-note
@@ -16,19 +17,10 @@ import type { ScannedItem, Customer } from "./stockOutTypes";
 // For now the Download button is a placeholder — PDF generation will
 // be implemented once the backend transaction endpoint is live.
 
-interface LocationState {
-  customer: Customer;
-  invoiceNumber: string;
-  notes: string;
-  items: ScannedItem[];
-  date: string;
-  processedBy: string;
-}
-
 export default function StockOutCompletePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as LocationState | null;
+  const state = location.state as StockOutApiTransaction | null;
 
   useEffect(() => {
     if (!state?.invoiceNumber) {
@@ -38,7 +30,7 @@ export default function StockOutCompletePage() {
 
   if (!state) return null;
 
-  const buildSpecsString = (item: ScannedItem) => {
+  const buildSpecsString = (item: StockOutApiItem) => {
     const parts = [
       item.processor,
       item.generation,
@@ -49,8 +41,8 @@ export default function StockOutCompletePage() {
     return parts.length > 0 ? parts.join(" • ") : "—";
   };
 
-  const okCount = state.items.filter((i) => i.status === "Ok").length;
-  const faultyCount = state.items.filter((i) => i.status === "Faulty").length;
+  const okCount = state.items.filter((i) => i.status === "OK").length;
+  const faultyCount = state.items.filter((i) => i.status === "FAULTY").length;
 
   return (
     <div className="soc-page">
@@ -67,9 +59,9 @@ export default function StockOutCompletePage() {
         <div>
           <h1>Stock Out Completed Successfully!</h1>
           <p>
-            {state.items.length} item
-            {state.items.length !== 1 ? "s have" : " has"} been issued to{" "}
-            <strong>{state.customer.name}</strong> and marked as Issued in the
+            {state.totalItems} item
+            {state.totalItems !== 1 ? "s have" : " has"} been issued to{" "}
+            <strong>{state.customerName}</strong> and marked as Issued in the
             system.
           </p>
         </div>
@@ -87,11 +79,11 @@ export default function StockOutCompletePage() {
         </div>
         <div className="soc-meta-item">
           <span>Customer</span>
-          <p>{state.customer.name}</p>
+          <p>{state.customerName}</p>
         </div>
         <div className="soc-meta-item">
           <span>Location</span>
-          <p>{state.customer.location}</p>
+          <p>{state.customerLocation}</p>
         </div>
         <div className="soc-meta-item">
           <span>Date</span>
@@ -103,7 +95,7 @@ export default function StockOutCompletePage() {
         </div>
         <div className="soc-meta-item">
           <span>Items Issued</span>
-          <p className="soc-item-count">{state.items.length}</p>
+          <p className="soc-item-count">{state.totalItems}</p>
         </div>
       </div>
 
@@ -122,7 +114,7 @@ export default function StockOutCompletePage() {
       {/* ── Items issued table ───────────────────────────────────────────────── */}
       <div className="soc-card">
         <h2 className="soc-card-title">
-          Items Issued ({state.items.length})
+          Items Issued ({state.totalItems})
         </h2>
         <div className="soc-table-wrap">
           <table className="soc-table">
@@ -153,12 +145,12 @@ export default function StockOutCompletePage() {
                   <td>
                     <span
                       className={`soc-status-pill ${
-                        item.status === "Ok"
+                        item.status === "OK"
                           ? "soc-status-ok"
                           : "soc-status-faulty"
                       }`}
                     >
-                      {item.status}
+                      {displayItemStatus(item.status)}
                     </span>
                   </td>
                 </tr>
