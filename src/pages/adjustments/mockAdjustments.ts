@@ -148,7 +148,7 @@ export const mockOkInventoryPool: Pick<
     storage: "256GB SSD",
     speed: "2.40GHz",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "CNT4-TTL-26-0006",
@@ -161,7 +161,7 @@ export const mockOkInventoryPool: Pick<
     storage: "512GB SSD",
     speed: "2.60GHz",
     screenType: "Touch Screen",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "ASH2-TTL-26-0010",
@@ -174,7 +174,7 @@ export const mockOkInventoryPool: Pick<
     storage: "256GB SSD",
     speed: "3.20GHz",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "ASH2-TTL-26-0011",
@@ -187,7 +187,7 @@ export const mockOkInventoryPool: Pick<
     storage: "512GB SSD",
     speed: "3.00GHz",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "CNT3-MWS-26-0050",
@@ -200,7 +200,7 @@ export const mockOkInventoryPool: Pick<
     storage: "1TB SSD",
     speed: "3.00GHz",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "CNT3-MWS-26-0051",
@@ -213,7 +213,7 @@ export const mockOkInventoryPool: Pick<
     storage: "256GB SSD",
     speed: "2.80GHz",
     screenType: "Touch Screen",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "ASH1-MWS-26-0020",
@@ -226,7 +226,7 @@ export const mockOkInventoryPool: Pick<
     storage: "",
     speed: "",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
   {
     assetId: "CONT4-TTL-26-0015",
@@ -239,7 +239,7 @@ export const mockOkInventoryPool: Pick<
     storage: "512GB SSD",
     speed: "2.80GHz",
     screenType: "Non-Touch",
-    status: "Ok",
+    status: "OK",
   },
 ];
 

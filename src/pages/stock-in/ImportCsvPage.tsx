@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -19,9 +19,17 @@ import {
 } from "lucide-react";
 
 import "./ImportCsvPage.css";
-import { stockInShipments } from "./mockStockIn";
+import { apiFetch } from "../../services/api";
+import type { Shipment } from "../shipments/shipmentTypes";
 import { downloadCsvTemplate, formatFileSize, parseInventoryFile, validateCsvRows } from "./csvParser";
 import type { CsvUploadType, CsvValidationResult } from "./csvImportTypes";
+
+function formatDateDMY(iso: string) {
+  const date = new Date(iso);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${date.getUTCFullYear()}`;
+}
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per documentation
 
@@ -39,9 +47,19 @@ export default function ImportCsvPage() {
   const navigate = useNavigate();
   const { shipmentId } = useParams();
 
-  const shipment = stockInShipments.find(
-    (item) => item.shipmentId === shipmentId
-  );
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(true);
+  const [shipmentError, setShipmentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!shipmentId) return;
+    setShipmentLoading(true);
+    setShipmentError(null);
+    apiFetch<Shipment>(`/shipments/${shipmentId}`)
+      .then(setShipment)
+      .catch((err: Error) => setShipmentError(err.message))
+      .finally(() => setShipmentLoading(false));
+  }, [shipmentId]);
 
   const [uploadType, setUploadType] = useState<CsvUploadType>("summary");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -207,7 +225,7 @@ export default function ImportCsvPage() {
       // Brief simulated validation delay for real-time feedback cue
       await new Promise((r) => setTimeout(r, 700));
 
-      navigate(`/stock-in/${shipment.shipmentId}/importcsv/preview`, {
+      navigate(`/stock-in/${shipment.id}/importcsv/preview`, {
         state: { validationResult: result },
       });
     } catch {
@@ -216,10 +234,18 @@ export default function ImportCsvPage() {
     }
   };
 
-  if (!shipment) {
+  if (shipmentLoading) {
     return (
       <div className="csv-page">
-        <h2>Shipment not found.</h2>
+        <h2>Loading shipment...</h2>
+      </div>
+    );
+  }
+
+  if (shipmentError || !shipment) {
+    return (
+      <div className="csv-page">
+        <h2>{shipmentError ? `Failed to load shipment: ${shipmentError}` : "Shipment not found."}</h2>
       </div>
     );
   }
@@ -240,7 +266,7 @@ export default function ImportCsvPage() {
         </div>
         <button
           className="csv-back-btn"
-          onClick={() => navigate(`/stock-in/${shipment.shipmentId}`)}
+          onClick={() => navigate(`/stock-in/${shipment.id}`)}
         >
           <ArrowLeft size={14} />
           Back to Workspace
@@ -262,7 +288,7 @@ export default function ImportCsvPage() {
           <div className="cs-icon cs-icon-vendor"><Building2 size={16} /></div>
           <div>
             <span>Vendor</span>
-            <h3>{shipment.vendor}</h3>
+            <h3>{shipment.vendor.vendorId}</h3>
           </div>
         </div>
 
@@ -301,7 +327,7 @@ export default function ImportCsvPage() {
           <div className="cs-icon cs-icon-date"><Calendar size={16} /></div>
           <div>
             <span>Received Date</span>
-            <h3>{shipment.shipmentReceivedDate}</h3>
+            <h3>{formatDateDMY(shipment.shipmentReceivedDate)}</h3>
           </div>
         </div>
       </div>
@@ -538,7 +564,7 @@ export default function ImportCsvPage() {
       <div className="csv-footer">
         <button
           className="csv-cancel-btn"
-          onClick={() => navigate(`/stock-in/${shipment.shipmentId}`)}
+          onClick={() => navigate(`/stock-in/${shipment.id}`)}
         >
           Cancel
         </button>

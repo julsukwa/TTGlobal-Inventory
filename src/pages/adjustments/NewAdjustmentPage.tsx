@@ -158,7 +158,7 @@ export default function NewAdjustmentPage() {
       return;
     }
 
-    if (match.status !== "Ok") {
+    if (match.status !== "OK") {
       setSearchError("This item is already marked as Faulty.");
       return;
     }
@@ -263,7 +263,7 @@ export default function NewAdjustmentPage() {
         continue;
       }
 
-      if (match.status !== "Ok") {
+      if (match.status !== "OK") {
         rows.push({ assetId, faultTypes, status: "Invalid", reason: "Already marked as Faulty." });
         continue;
       }

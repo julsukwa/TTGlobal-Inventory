@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
@@ -17,9 +17,11 @@ import {
 } from "lucide-react";
 
 import "./ImportCsvPreviewPage.css";
-import { stockInShipments } from "./mockStockIn";
+import { apiFetch } from "../../services/api";
+import type { Shipment } from "../shipments/shipmentTypes";
 import { downloadErrorReport } from "./csvParser";
 import { csvRowToSessionItem, type CsvValidationResult } from "./csvImportTypes";
+import { toStockInApiItem, type StockInResult } from "./stockInApi";
 
 type RowFilter = "all" | "valid" | "invalid";
 
@@ -30,9 +32,21 @@ export default function ImportCsvPreviewPage() {
 
   const result: CsvValidationResult | undefined = location.state?.validationResult;
 
-  const shipment = stockInShipments.find(
-    (item) => item.shipmentId === shipmentId
-  );
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(true);
+  const [shipmentError, setShipmentError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!shipmentId) return;
+    setShipmentLoading(true);
+    setShipmentError(null);
+    apiFetch<Shipment>(`/shipments/${shipmentId}`)
+      .then(setShipment)
+      .catch((err: Error) => setShipmentError(err.message))
+      .finally(() => setShipmentLoading(false));
+  }, [shipmentId]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
@@ -56,10 +70,18 @@ export default function ImportCsvPreviewPage() {
     });
   }, [result, searchTerm, rowFilter]);
 
-  if (!shipment) {
+  if (shipmentLoading) {
     return (
       <div className="csvprev-page">
-        <h2>Shipment not found.</h2>
+        <h2>Loading shipment...</h2>
+      </div>
+    );
+  }
+
+  if (shipmentError || !shipment) {
+    return (
+      <div className="csvprev-page">
+        <h2>{shipmentError ? `Failed to load shipment: ${shipmentError}` : "Shipment not found."}</h2>
       </div>
     );
   }
@@ -89,23 +111,40 @@ export default function ImportCsvPreviewPage() {
   const allRowsValid = !hasRowErrors && result.rows.length > 0;
   const canImport = !hasFileLevelErrors && !hasRowErrors && result.validRows.length > 0;
 
-  const handleConfirmImport = () => {
-  
-    if (!canImport) return;
+  const handleConfirmImport = async () => {
+    if (!canImport || !shipment) return;
 
-    
-    const sessionItems = result.validRows.map((row, idx) =>
-      csvRowToSessionItem(row, Date.now() + idx)
-    );
+    setConfirming(true);
+    setSubmitError(null);
 
-    navigate(`/stock-in/${shipmentId}/processing`, {
-      state: {
-        sessionItems,
-        source: "csv",
-        csvFileName: result.fileName,
-        csvRowCount: result.rows.length,
-      },
-    });
+    try {
+      const sessionItems = result.validRows.map((row, idx) =>
+        csvRowToSessionItem(row, Date.now() + idx)
+      );
+      const rows = sessionItems.map(toStockInApiItem);
+
+      const apiResult = await apiFetch<StockInResult>("/stock-in/csv", {
+        method: "POST",
+        body: JSON.stringify({
+          shipmentId: shipment.id,
+          uploadType: result.uploadType,
+          rows,
+        }),
+      });
+
+      navigate(`/stock-in/${shipment.id}/complete`, {
+        state: {
+          ...apiResult,
+          source: "csv",
+          csvFileName: result.fileName,
+          csvRowCount: result.rows.length,
+        },
+      });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to import CSV.");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -404,11 +443,19 @@ export default function ImportCsvPreviewPage() {
         </div>
       </div>
 
+      {submitError && (
+        <div className="csvprev-banner banner-error">
+          <XCircle size={18} />
+          <span>{submitError}</span>
+        </div>
+      )}
+
       {/* ── Footer actions ──────────────────────────────────────────────────── */}
       <div className="csvprev-footer">
         <button
           className="csvprev-reupload-btn"
           onClick={() => navigate(`/stock-in/${shipmentId}/importcsv`)}
+          disabled={confirming}
         >
           <RotateCcw size={14} />
           {hasFileLevelErrors ? "Upload a Different File" : "Re-upload CSV"}
@@ -424,7 +471,7 @@ export default function ImportCsvPreviewPage() {
           <button
             className="csvprev-confirm-btn"
             onClick={handleConfirmImport}
-            disabled={!canImport}
+            disabled={!canImport || confirming}
             title={
               hasRowErrors
                 ? "Resolve all row errors before importing"
@@ -433,7 +480,9 @@ export default function ImportCsvPreviewPage() {
                 : undefined
             }
           >
-            {hasRowErrors || hasFileLevelErrors ? (
+            {confirming ? (
+              <>Importing...</>
+            ) : hasRowErrors || hasFileLevelErrors ? (
               <>Fix Errors to Continue</>
             ) : (
               <>

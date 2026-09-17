@@ -293,6 +293,7 @@
 
 .status-ok { background: var(--color-success-bg); color: var(--color-success-text); }
 .status-faulty { background: var(--color-danger-bg); color: var(--color-danger-text); }
+.status-issued { background: var(--color-issued-bg); color: var(--color-issued-text); }
 
 .date-cell {
   color: var(--color-text-muted);
@@ -563,6 +564,12 @@
 }
 
 .vii-drawer-btn-primary:hover { background: var(--color-primary-dark); }
+
+.vii-drawer-btn-primary:disabled {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
 
 /* RESPONSIVE */
 

@@ -1,24 +1,28 @@
 // ─── View Imported Inventory — types ──────────────────────────────────────────
 //
 // Represents a single inventory record already committed to the system under
-// a shipment — i.e. the output of a completed manual or CSV stock-in session,
-// not a draft/session item awaiting confirmation (see manualStockInTypes.ts
-// for that earlier-stage shape).
+// a shipment — i.e. the output of a completed manual or CSV stock-in session.
 //
-// Per product decision: this page shows EVERY batch/import ever done into a
-// shipment, not just the most recent one — batchId is what lets the admin
-// tell which import session a given row came from.
+// Matches the shape returned by GET /stock-in/inventory/:shipmentId (a raw
+// Prisma InventoryItem), with batchId/uploadType resolved client-side from
+// GET /stock-in/batches/:shipmentId since the backend record only carries the
+// batch's numeric FK, not its human-readable code.
 //
 // Status terminology (per TT Global business decision):
-//   "Ok"     — item is in good working condition, available for use or sale
-//   "Faulty" — item has been marked defective via the Adjustments module
-//   "Issued" — item has been sold/issued to a customer via Stock Out
+//   "OK"     — item is in good working condition, available for use or sale
+//   "FAULTY" — item has been marked defective via the Adjustments module
+//   "ISSUED" — item has been sold/issued to a customer via Stock Out
 
-export type InventoryItemStatus = "Ok" | "Faulty" | "Issued";
+export type InventoryItemStatus = "OK" | "FAULTY" | "ISSUED";
+export type AssetIdSourceType = "GENERATED" | "PROVIDED";
 
 export interface ImportedInventoryItem {
+  id: number;
   assetId: string; // e.g. "CNT1-TTL-26-0001" — ShipmentID-VendorID-Year-Sequence
-  batchId: string; // e.g. "BCH-8F3A91C2" — identifies the import session this came from
+  assetIdSource: AssetIdSourceType;
+  batchId: string; // resolved business batch code, e.g. "CNT1-TTL-26-0001"
+  uploadType: string; // "manual" | "csv-summary" | "csv-detailed" — resolved via batch lookup
+  listNumber: string;
 
   category: string;
   condition: string;
@@ -35,17 +39,5 @@ export interface ImportedInventoryItem {
   additionalInfo: string; // free-text notes, may be ""
 
   status: InventoryItemStatus;
-
-  source: "manual" | "csv"; // which entry method created this record
-  dateImported: string; // ISO-ish display string, e.g. "12/05/2026 10:24 AM"
-}
-
-/** Summary of a single import session (one Batch ID), derived from the
- * inventory items that share that batchId. Used to group/filter the table
- * by "which import did this come from." */
-export interface BatchSummary {
-  batchId: string;
-  source: "manual" | "csv";
-  itemCount: number;
-  dateImported: string;
+  dateImported: string; // formatted display string derived from importedAt
 }

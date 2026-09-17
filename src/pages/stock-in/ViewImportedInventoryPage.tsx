@@ -1,11 +1,10 @@
-﻿import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Search,
   Filter,
   Eye,
-  Pencil,
   Printer,
   X,
   Package,
@@ -18,115 +17,215 @@ import {
 import * as XLSX from "xlsx";
 
 import "./ViewImportedInventoryPage.css";
-import { stockInShipments } from "./mockStockIn";
-import { importedInventory } from "./mockImportedInventory";
-import type { ImportedInventoryItem, InventoryItemStatus } from "./ImportedInventoryTypes";
+import { apiFetch } from "../../services/api";
+import type { Shipment } from "../shipments/shipmentTypes";
+import type {
+  AssetIdSourceType,
+  ImportedInventoryItem,
+  InventoryItemStatus,
+} from "./ImportedInventoryTypes";
 
 type StatusFilter = "all" | InventoryItemStatus;
 
-// NOTE FOR BACKEND INTEGRATION: this page currently reads from a hardcoded
-// mock array (mockImportedInventory.ts) filtered client-side by shipmentId.
-// Once a backend exists this becomes GET /shipments/:shipmentId/inventory —
-// the filtering, search, and batch-grouping logic below should move
-// server-side too (same reasoning as CSV validation: a shared, authoritative
-// dataset shouldn't be computed from a snapshot the browser already has).
+interface RawInventoryItem {
+  id: number;
+  assetId: string;
+  assetIdSource: AssetIdSourceType;
+  listNumber: string;
+  batchId: number;
+  category: string;
+  condition: string;
+  brand: string;
+  model: string;
+  processor: string;
+  generation: string;
+  ram: string;
+  storage: string;
+  speed: string;
+  screenType: string;
+  notes: string;
+  status: InventoryItemStatus;
+  importedAt: string;
+}
+
+interface RawStockInBatch {
+  id: number;
+  batchId: string;
+  uploadType: string;
+}
+
+interface BatchInfo {
+  batchId: string;
+  uploadType: string;
+}
+
+function formatDateTime(iso: string) {
+  const date = new Date(iso);
+  const datePart = date.toLocaleDateString("en-GB");
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  });
+  return `${datePart} ${timePart}`;
+}
+
+function formatUploadType(uploadType: string) {
+  if (uploadType === "manual") return "Manual Entry";
+  if (uploadType === "csv-summary") return "CSV/Excel Import (Summary)";
+  if (uploadType === "csv-detailed") return "CSV/Excel Import (Detailed)";
+  return uploadType;
+}
+
+function mapItem(raw: RawInventoryItem, batchLookup: Map<number, BatchInfo>): ImportedInventoryItem {
+  const batchInfo = batchLookup.get(raw.batchId);
+  return {
+    id: raw.id,
+    assetId: raw.assetId,
+    assetIdSource: raw.assetIdSource,
+    batchId: batchInfo?.batchId ?? `Batch #${raw.batchId}`,
+    uploadType: batchInfo?.uploadType ?? "",
+    listNumber: raw.listNumber,
+    category: raw.category,
+    condition: raw.condition,
+    brand: raw.brand,
+    model: raw.model,
+    processor: raw.processor,
+    generation: raw.generation,
+    ram: raw.ram,
+    storage: raw.storage,
+    speed: raw.speed,
+    screenType: raw.screenType,
+    additionalInfo: raw.notes,
+    status: raw.status,
+    dateImported: formatDateTime(raw.importedAt),
+  };
+}
 
 export default function ViewImportedInventoryPage() {
   const navigate = useNavigate();
   const { shipmentId } = useParams();
 
-  const shipment = stockInShipments.find((s) => s.shipmentId === shipmentId);
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [batchLookup, setBatchLookup] = useState<Map<number, BatchInfo>>(new Map());
+  const [batchCount, setBatchCount] = useState(0);
+  const [shipmentLoading, setShipmentLoading] = useState(true);
+  const [shipmentError, setShipmentError] = useState<string | null>(null);
+
+  // Unfiltered snapshot — used only to derive stable filter dropdown options
+  // and shipment-wide totals (Ok/Faulty counts), independent of active filters.
+  const [allItems, setAllItems] = useState<ImportedInventoryItem[]>([]);
+
+  const [items, setItems] = useState<ImportedInventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<ImportedInventoryItem | null>(null);
-  const [localInventory, setLocalInventory] = useState<ImportedInventoryItem[]>(importedInventory);
 
-  // Editable copy used inside the drawer's Edit Details mode. Kept separate
-  // from selectedItem so cancelling an edit doesn't leave stray partial state.
-  const [editForm, setEditForm] = useState<ImportedInventoryItem | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  // ── Shipment + batch lookup (for resolving the numeric batch FK to its
+  // human-readable batch code and upload type) ────────────────────────────
+  useEffect(() => {
+    if (!shipmentId) return;
+    setShipmentLoading(true);
+    setShipmentError(null);
 
-  const shipmentItems = useMemo(
-    () => localInventory.filter((item) => item.assetId.startsWith(`${shipmentId}-`)),
-    [localInventory, shipmentId]
-  );
+    Promise.all([
+      apiFetch<Shipment>(`/shipments/${shipmentId}`),
+      apiFetch<RawStockInBatch[]>(`/stock-in/batches/${shipmentId}`),
+    ])
+      .then(([shipmentData, batches]) => {
+        setShipment(shipmentData);
+        setBatchCount(batches.length);
+        setBatchLookup(
+          new Map(batches.map((b) => [b.id, { batchId: b.batchId, uploadType: b.uploadType }]))
+        );
+      })
+      .catch((err: Error) => setShipmentError(err.message))
+      .finally(() => setShipmentLoading(false));
+  }, [shipmentId]);
+
+  // ── Unfiltered snapshot for filter options + shipment-wide totals ───────
+  useEffect(() => {
+    if (!shipmentId) return;
+    apiFetch<RawInventoryItem[]>(`/stock-in/inventory/${shipmentId}`)
+      .then((rows) => setAllItems(rows.map((row) => mapItem(row, batchLookup))))
+      .catch(() => {
+        // Filter dropdowns/totals just stay empty on failure — the main
+        // (filtered) fetch below still reports its own error if it fails.
+      });
+  }, [shipmentId, batchLookup]);
+
+  // ── Filtered fetch — search/category/status are applied server-side;
+  // condition has no backend filter support, so it's applied client-side
+  // below on top of whatever the server returned. Debounced so typing in
+  // the search box doesn't fire a request per keystroke. ──────────────────
+  useEffect(() => {
+    if (!shipmentId) return;
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (categoryFilter !== "all") params.set("category", categoryFilter);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      const query = params.toString();
+
+      apiFetch<RawInventoryItem[]>(`/stock-in/inventory/${shipmentId}${query ? `?${query}` : ""}`)
+        .then((rows) => {
+          if (!cancelled) setItems(rows.map((row) => mapItem(row, batchLookup)));
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [shipmentId, categoryFilter, statusFilter, searchTerm, batchLookup]);
 
   const conditions = useMemo(
-    () => Array.from(new Set(shipmentItems.map((item) => item.condition))).sort(),
-    [shipmentItems]
+    () => Array.from(new Set(allItems.map((item) => item.condition))).filter(Boolean).sort(),
+    [allItems]
   );
 
   const categories = useMemo(
-    () => Array.from(new Set(shipmentItems.map((item) => item.category))).sort(),
-    [shipmentItems]
+    () => Array.from(new Set(allItems.map((item) => item.category))).filter(Boolean).sort(),
+    [allItems]
   );
 
-  const filteredItems = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-    return shipmentItems.filter((item) => {
-      const matchesSearch =
-        !search ||
-        item.assetId.toLowerCase().includes(search) ||
-        item.model.toLowerCase().includes(search) ||
-        item.brand.toLowerCase().includes(search) ||
-        item.batchId.toLowerCase().includes(search);
+  // Condition isn't supported by the backend filter, so it's applied here
+  // on top of the server-filtered list.
+  const filteredItems = useMemo(
+    () => items.filter((item) => conditionFilter === "all" || item.condition === conditionFilter),
+    [items, conditionFilter]
+  );
 
-      const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-      const matchesCondition = conditionFilter === "all" || item.condition === conditionFilter;
-      const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
-
-      return matchesSearch && matchesStatus && matchesCondition && matchesCategory;
-    });
-  }, [shipmentItems, searchTerm, statusFilter, conditionFilter, categoryFilter]);
-
-  const okCount = shipmentItems.filter((i) => i.status === "Ok").length;
-  const faultyCount = shipmentItems.filter((i) => i.status === "Faulty").length;
+  const okCount = allItems.filter((i) => i.status === "OK").length;
+  const faultyCount = allItems.filter((i) => i.status === "FAULTY").length;
 
   const handleViewDetails = (item: ImportedInventoryItem) => {
     setSelectedItem(item);
-    setIsEditing(false);
-    setEditForm(null);
   };
 
   const handleCloseDrawer = () => {
     setSelectedItem(null);
-    setIsEditing(false);
-    setEditForm(null);
-  };
-
-  const handleStartEdit = () => {
-    if (!selectedItem) return;
-    setEditForm({ ...selectedItem });
-    setIsEditing(true);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditForm(null);
-  };
-
-  const handleEditFieldChange = (field: keyof ImportedInventoryItem, value: string) => {
-    if (!editForm) return;
-    setEditForm({ ...editForm, [field]: value });
-  };
-
-  const handleSaveEdit = () => {
-    if (!editForm) return;
-    setLocalInventory((prev) =>
-      prev.map((i) => (i.assetId === editForm.assetId ? editForm : i))
-    );
-    setSelectedItem(editForm);
-    setIsEditing(false);
   };
 
   const exportXLSX = () => {
     const headers = [
       "Asset ID", "Batch ID", "Category", "Condition", "Brand", "Model",
       "Processor", "Generation", "RAM", "Storage", "Speed", "Comment",
-      "Additional Information", "Status", "Source", "Date Imported",
+      "Additional Information", "Status", "Import Method", "Date Imported",
     ];
 
     const dataRows = filteredItems.map((item) => [
@@ -144,7 +243,7 @@ export default function ViewImportedInventoryPage() {
       item.screenType || "",
       item.additionalInfo || "",
       item.status,
-      item.source === "csv" ? "CSV/Excel Import" : "Manual Entry",
+      formatUploadType(item.uploadType),
       item.dateImported,
     ]);
 
@@ -153,7 +252,7 @@ export default function ViewImportedInventoryPage() {
     // Column widths (characters)
     ws["!cols"] = [
       { wch: 22 }, // Asset ID
-      { wch: 16 }, // Batch ID
+      { wch: 18 }, // Batch ID
       { wch: 14 }, // Category
       { wch: 12 }, // Condition
       { wch: 14 }, // Brand
@@ -166,7 +265,7 @@ export default function ViewImportedInventoryPage() {
       { wch: 14 }, // Comment
       { wch: 30 }, // Additional Information
       { wch: 12 }, // Status
-      { wch: 18 }, // Source
+      { wch: 24 }, // Import Method
       { wch: 20 }, // Date Imported
     ];
 
@@ -179,7 +278,7 @@ export default function ViewImportedInventoryPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Inventory");
 
-    XLSX.writeFile(wb, `${shipmentId}-inventory.xlsx`);
+    XLSX.writeFile(wb, `${shipment?.shipmentId ?? shipmentId}-inventory.xlsx`);
   };
 
   const handlePrintSticker = (item: ImportedInventoryItem) => {
@@ -188,10 +287,18 @@ export default function ViewImportedInventoryPage() {
     alert(`Sticker for ${item.assetId} queued for printing.`);
   };
 
-  if (!shipment) {
+  if (shipmentLoading) {
     return (
       <div className="vii-page">
-        <h2>Shipment not found.</h2>
+        <h2>Loading shipment...</h2>
+      </div>
+    );
+  }
+
+  if (shipmentError || !shipment) {
+    return (
+      <div className="vii-page">
+        <h2>{shipmentError ? `Failed to load shipment: ${shipmentError}` : "Shipment not found."}</h2>
       </div>
     );
   }
@@ -219,7 +326,7 @@ export default function ViewImportedInventoryPage() {
           </button>
           <button
             className="vii-back-btn"
-            onClick={() => navigate(`/stock-in/${shipment.shipmentId}`)}
+            onClick={() => navigate(`/stock-in/${shipment.id}`)}
           >
             <ArrowLeft size={14} />
             Back to Workspace
@@ -233,7 +340,7 @@ export default function ViewImportedInventoryPage() {
           <div className="vii-icon vii-icon-blue"><Package size={16} /></div>
           <div>
             <span>Total Inventory</span>
-            <h3>{shipmentItems.length}</h3>
+            <h3>{allItems.length}</h3>
             <p>Items in this shipment</p>
           </div>
         </div>
@@ -242,7 +349,7 @@ export default function ViewImportedInventoryPage() {
           <div className="vii-icon vii-icon-purple"><Layers size={16} /></div>
           <div>
             <span>Batches</span>
-            <h3>{new Set(shipmentItems.map((i) => i.batchId)).size}</h3>
+            <h3>{batchCount}</h3>
             <p>Import sessions</p>
           </div>
         </div>
@@ -273,7 +380,7 @@ export default function ViewImportedInventoryPage() {
             <Search size={14} />
             <input
               type="text"
-              placeholder="Search by Asset ID, Model, Brand, or Batch ID..."
+              placeholder="Search by Asset ID, Model, or Brand..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -303,8 +410,9 @@ export default function ViewImportedInventoryPage() {
           <div className="vii-filter">
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
               <option value="all">All Status</option>
-              <option value="Ok">Ok</option>
-              <option value="Faulty">Faulty</option>
+              <option value="OK">Ok</option>
+              <option value="FAULTY">Faulty</option>
+              <option value="ISSUED">Issued</option>
             </select>
           </div>
         </div>
@@ -332,17 +440,29 @@ export default function ViewImportedInventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan={16} className="vii-empty-row">
-                    {shipmentItems.length === 0
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={16} className="vii-empty-row">
+                    Failed to load inventory: {error}
+                  </td>
+                </tr>
+              ) : filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={16} className="vii-empty-row">
+                    {allItems.length === 0
                       ? "No inventory has been imported into this shipment yet."
                       : "No items match your search/filter."}
                   </td>
                 </tr>
               ) : (
                 filteredItems.map((item) => (
-                  <tr key={item.assetId}>
+                  <tr key={item.id}>
                     <td className="vii-asset-id">{item.assetId}</td>
                     <td>
                       <span className="batch-pill">{item.batchId}</span>
@@ -379,7 +499,11 @@ export default function ViewImportedInventoryPage() {
                     <td>
                       <span
                         className={`status-pill ${
-                          item.status === "Ok" ? "status-ok" : "status-faulty"
+                          item.status === "OK"
+                            ? "status-ok"
+                            : item.status === "FAULTY"
+                            ? "status-faulty"
+                            : "status-issued"
                         }`}
                       >
                         {item.status}
@@ -413,7 +537,7 @@ export default function ViewImportedInventoryPage() {
 
         <div className="vii-table-footer">
           <span>
-            Showing {filteredItems.length} of {shipmentItems.length} items
+            Showing {filteredItems.length} of {allItems.length} items
           </span>
         </div>
       </div>
@@ -438,7 +562,11 @@ export default function ViewImportedInventoryPage() {
                 </h3>
                 <span
                   className={`status-pill ${
-                    selectedItem.status === "Ok" ? "status-ok" : "status-faulty"
+                    selectedItem.status === "OK"
+                      ? "status-ok"
+                      : selectedItem.status === "FAULTY"
+                      ? "status-faulty"
+                      : "status-issued"
                   }`}
                 >
                   {selectedItem.status}
@@ -449,129 +577,52 @@ export default function ViewImportedInventoryPage() {
               <div className="vii-drawer-section">
                 <h4>Technical Specifications</h4>
 
-                {!isEditing ? (
-                  <div className="vii-drawer-grid">
-                    <div>
-                      <span>Category</span>
-                      <p>{selectedItem.category}</p>
-                    </div>
-                    <div>
-                      <span>Condition</span>
-                      <p>{selectedItem.condition}</p>
-                    </div>
-                    <div>
-                      <span>Brand</span>
-                      <p>{selectedItem.brand}</p>
-                    </div>
-                    <div>
-                      <span>Model</span>
-                      <p>{selectedItem.model}</p>
-                    </div>
-                    <div>
-                      <span>Processor</span>
-                      <p>{selectedItem.processor || "—"}</p>
-                    </div>
-                    <div>
-                      <span>Generation</span>
-                      <p>{selectedItem.generation || "—"}</p>
-                    </div>
-                    <div>
-                      <span>RAM</span>
-                      <p>{selectedItem.ram || "—"}</p>
-                    </div>
-                    <div>
-                      <span>Storage</span>
-                      <p>{selectedItem.storage || "—"}</p>
-                    </div>
-                    <div>
-                      <span>Speed</span>
-                      <p>{selectedItem.speed || "—"}</p>
-                    </div>
-                    <div>
-                      <span>Comment</span>
-                      <p>{selectedItem.screenType || "—"}</p>
-                    </div>
-                    <div className="vii-drawer-full-col">
-                      <span>Additional Information</span>
-                      <p>{selectedItem.additionalInfo || "—"}</p>
-                    </div>
+                <div className="vii-drawer-grid">
+                  <div>
+                    <span>Category</span>
+                    <p>{selectedItem.category}</p>
                   </div>
-                ) : (
-                  <div className="vii-edit-grid">
-                    {/* Asset ID / Batch ID / Shipment / Vendor are intentionally
-                        NOT editable here — protected fields per documentation,
-                        since they preserve traceability back to the import
-                        session and shipment. */}
-                    <label>
-                      Brand
-                      <input
-                        value={editForm?.brand ?? ""}
-                        onChange={(e) => handleEditFieldChange("brand", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Model
-                      <input
-                        value={editForm?.model ?? ""}
-                        onChange={(e) => handleEditFieldChange("model", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Processor
-                      <input
-                        value={editForm?.processor ?? ""}
-                        onChange={(e) => handleEditFieldChange("processor", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Generation
-                      <input
-                        value={editForm?.generation ?? ""}
-                        onChange={(e) => handleEditFieldChange("generation", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      RAM
-                      <input
-                        value={editForm?.ram ?? ""}
-                        onChange={(e) => handleEditFieldChange("ram", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Storage
-                      <input
-                        value={editForm?.storage ?? ""}
-                        onChange={(e) => handleEditFieldChange("storage", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Speed
-                      <input
-                        value={editForm?.speed ?? ""}
-                        onChange={(e) => handleEditFieldChange("speed", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Comment
-                      <select
-                        value={editForm?.screenType ?? ""}
-                        onChange={(e) => handleEditFieldChange("screenType", e.target.value)}
-                      >
-                        <option value="">Select screen type</option>
-                        <option value="Touch Screen">Touch Screen</option>
-                        <option value="Non-Touch">Non-Touch</option>
-                      </select>
-                    </label>
-                    <label className="vii-edit-full-col">
-                      Additional Information
-                      <textarea
-                        value={editForm?.additionalInfo ?? ""}
-                        onChange={(e) => handleEditFieldChange("additionalInfo", e.target.value)}
-                        rows={2}
-                      />
-                    </label>
+                  <div>
+                    <span>Condition</span>
+                    <p>{selectedItem.condition}</p>
                   </div>
-                )}
+                  <div>
+                    <span>Brand</span>
+                    <p>{selectedItem.brand}</p>
+                  </div>
+                  <div>
+                    <span>Model</span>
+                    <p>{selectedItem.model}</p>
+                  </div>
+                  <div>
+                    <span>Processor</span>
+                    <p>{selectedItem.processor || "—"}</p>
+                  </div>
+                  <div>
+                    <span>Generation</span>
+                    <p>{selectedItem.generation || "—"}</p>
+                  </div>
+                  <div>
+                    <span>RAM</span>
+                    <p>{selectedItem.ram || "—"}</p>
+                  </div>
+                  <div>
+                    <span>Storage</span>
+                    <p>{selectedItem.storage || "—"}</p>
+                  </div>
+                  <div>
+                    <span>Speed</span>
+                    <p>{selectedItem.speed || "—"}</p>
+                  </div>
+                  <div>
+                    <span>Comment</span>
+                    <p>{selectedItem.screenType || "—"}</p>
+                  </div>
+                  <div className="vii-drawer-full-col">
+                    <span>Additional Information</span>
+                    <p>{selectedItem.additionalInfo || "—"}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Import information */}
@@ -588,7 +639,7 @@ export default function ViewImportedInventoryPage() {
                   </div>
                   <div>
                     <span>Vendor</span>
-                    <p>{shipment.vendor}</p>
+                    <p>{shipment.vendor.vendorId}</p>
                   </div>
                   <div>
                     <span>Batch ID</span>
@@ -596,7 +647,7 @@ export default function ViewImportedInventoryPage() {
                   </div>
                   <div>
                     <span>Import Method</span>
-                    <p>{selectedItem.source === "csv" ? "CSV/Excel Import" : "Manual Entry"}</p>
+                    <p>{formatUploadType(selectedItem.uploadType)}</p>
                   </div>
                   <div>
                     <span>Date Imported</span>
@@ -607,27 +658,16 @@ export default function ViewImportedInventoryPage() {
             </div>
 
             <div className="vii-drawer-footer">
-              {!isEditing ? (
-                <>
-                  <button className="vii-drawer-btn-secondary" onClick={() => handlePrintSticker(selectedItem)}>
-                    <Printer size={14} />
-                    Print Sticker
-                  </button>
-                  <button className="vii-drawer-btn-primary" onClick={handleStartEdit}>
-                    <Pencil size={14} />
-                    Edit Details
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="vii-drawer-btn-secondary" onClick={handleCancelEdit}>
-                    Cancel
-                  </button>
-                  <button className="vii-drawer-btn-primary" onClick={handleSaveEdit}>
-                    Save Changes
-                  </button>
-                </>
-              )}
+              <button className="vii-drawer-btn-secondary" onClick={() => handlePrintSticker(selectedItem)}>
+                <Printer size={14} />
+                Print Sticker
+              </button>
+              {/* TODO: wire up once PATCH /inventory/:assetId exists on the
+                  backend — editing is disabled for now rather than faking a
+                  local-only save that wouldn't actually persist. */}
+              <button className="vii-drawer-btn-primary" disabled title="Editing is not available yet">
+                Edit Details (Coming Soon)
+              </button>
             </div>
           </div>
         </div>

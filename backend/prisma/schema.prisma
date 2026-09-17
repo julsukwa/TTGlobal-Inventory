@@ -134,6 +134,7 @@ model InventoryItem {
   adjustments     Adjustment[]
   stockOutItems   StockOutItem[]
   warrantyReturns WarrantyReturn[]
+  stickerQueue    StickerQueue?
 }
 
 enum AssetIdSource {
@@ -145,6 +146,21 @@ enum ItemStatus {
   OK
   FAULTY
   ISSUED
+}
+
+// ── Sticker Queue ─────────────────────────────────────────────────────────────
+model StickerQueue {
+  id          Int           @id @default(autoincrement())
+  inventoryId Int           @unique
+  inventory   InventoryItem @relation(fields: [inventoryId], references: [id])
+  status      StickerStatus @default(PENDING)
+  printedAt   DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+enum StickerStatus {
+  PENDING
+  PRINTED
 }
 
 // ── Adjustments (marking items as Faulty) ────────────────────────────────────

@@ -15,11 +15,29 @@ import {
   PackagePlus,
   LayoutDashboard,
   Info,
+  AlertTriangle,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import "./StockInCompletePage.css";
-import { stockInShipments } from "./mockStockIn";
+import { apiFetch } from "../../services/api";
+import type { Shipment, ShipmentStatus } from "../shipments/shipmentTypes";
+import type { StockInResult } from "./stockInApi";
+
+interface Reconciliation {
+  itemsSent: number;
+  itemsReceived: number;
+  issuedCount: number;
+  remaining: number;
+  status: ShipmentStatus;
+  percentageReceived: number;
+}
+
+interface CompleteLocationState extends StockInResult {
+  source?: "manual" | "csv";
+  csvFileName?: string;
+  csvRowCount?: number;
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -28,35 +46,40 @@ export default function StockInCompletePage() {
   const { shipmentId } = useParams();
   const location = useLocation();
 
-  const {
-    batchId,
-    totalItems,
-    importDate,
-    source = "manual",
-    csvFileName,
-    csvRowCount,
-  }: {
-    batchId?: string;
-    totalItems?: number;
-    importDate?: string;
-    source?: "manual" | "csv";
-    csvFileName?: string;
-    csvRowCount?: number;
-  } = location.state ?? {};
+  const result = (location.state ?? null) as CompleteLocationState | null;
+  const isCsv = result?.source === "csv";
 
-  const isCsv = source === "csv";
-
-  const shipment = stockInShipments.find((s) => s.shipmentId === shipmentId);
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (!shipmentId) return;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      apiFetch<Shipment>(`/shipments/${shipmentId}`),
+      apiFetch<Reconciliation>(`/shipments/${shipmentId}/reconciliation`),
+    ])
+      .then(([shipmentData, reconciliationData]) => {
+        setShipment(shipmentData);
+        setReconciliation(reconciliationData);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(batchId ?? "").then(() => {
+    navigator.clipboard.writeText(result?.batchId ?? "").then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   };
 
-  const completedDate = importDate ? new Date(importDate) : new Date();
+  const completedDate = new Date();
   const formattedDate = completedDate.toLocaleDateString("en-GB", {
     day: "numeric", month: "long", year: "numeric",
   });
@@ -64,15 +87,42 @@ export default function StockInCompletePage() {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
   });
 
-  // Shipment reconciliation figures (previous + this session)
-  const prevReceived = shipment?.itemsReceived ?? 0;
-  const newTotal = prevReceived + (totalItems ?? 0);
-  const sent = shipment?.itemsSent ?? 0;
-  const isFullyReconciled = newTotal >= sent;
-
-  if (!shipment) {
-    return <div className="complete-page"><p>Shipment not found.</p></div>;
+  if (!result) {
+    return (
+      <div className="complete-page">
+        <div className="complete-empty-state">
+          <AlertTriangle size={32} />
+          <h2>No stock-in session data</h2>
+          <p>Please complete a manual entry or CSV import session first.</p>
+          <button
+            className="complete-back-btn"
+            onClick={() => navigate(`/stock-in/${shipmentId}`)}
+          >
+            <ArrowLeft size={14} />
+            Back to Shipment Workspace
+          </button>
+        </div>
+      </div>
+    );
   }
+
+  if (loading) {
+    return (
+      <div className="complete-page">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (error || !shipment || !reconciliation) {
+    return (
+      <div className="complete-page">
+        <p>{error ? `Failed to load shipment: ${error}` : "Shipment not found."}</p>
+      </div>
+    );
+  }
+
+  const isFullyReconciled = reconciliation.status === "COMPLETE";
 
   return (
     <div className="complete-page">
@@ -109,7 +159,7 @@ export default function StockInCompletePage() {
           <div className="cs-icon cs-icon-blue"><Hash size={16} /></div>
           <div>
             <span>Shipment ID</span>
-            <h3>{shipment.shipmentId}</h3>
+            <h3>{result.shipmentId}</h3>
             <p>{shipment.shipmentName}</p>
           </div>
         </div>
@@ -118,10 +168,10 @@ export default function StockInCompletePage() {
           <div className="cs-icon cs-icon-purple"><LayoutGrid size={16} /></div>
           <div>
             <span>{isCsv ? "CSV File" : "Vendor"}</span>
-            <h3 className="cs-vendor" title={isCsv ? csvFileName : shipment.vendor}>
-              {isCsv ? (csvFileName ?? "—") : shipment.vendor}
+            <h3 className="cs-vendor" title={isCsv ? result.csvFileName : result.vendorId}>
+              {isCsv ? (result.csvFileName ?? "—") : result.vendorId}
             </h3>
-            {isCsv && <p>{csvRowCount ?? "—"} rows</p>}
+            {isCsv && <p>{result.csvRowCount ?? "—"} rows</p>}
           </div>
         </div>
 
@@ -130,7 +180,7 @@ export default function StockInCompletePage() {
           <div>
             <span>Batch ID</span>
             <h3 className="cs-batch">
-              {batchId ?? "—"}
+              {result.batchId}
               <button className="cs-copy-btn" onClick={handleCopy} title="Copy Batch ID">
                 {copied ? <span className="cs-copied">Copied!</span> : <Copy size={13} />}
               </button>
@@ -143,7 +193,7 @@ export default function StockInCompletePage() {
           <div className="cs-icon cs-icon-blue"><LayoutGrid size={16} /></div>
           <div>
             <span>Items Created</span>
-            <h3>{totalItems ?? "—"}</h3>
+            <h3>{result.itemsCreated}</h3>
             <p>Inventory Records</p>
           </div>
         </div>
@@ -161,7 +211,7 @@ export default function StockInCompletePage() {
           <div className="cs-icon cs-icon-gray"><User size={16} /></div>
           <div>
             <span>Completed By</span>
-            <h3>Admin</h3>
+            <h3>You</h3>
           </div>
         </div>
       </div>
@@ -175,7 +225,7 @@ export default function StockInCompletePage() {
             <h2>{isCsv ? "Import Summary" : "Stock-In Summary"}</h2>
             <p className="card-sub">
               {isCsv
-                ? `Details of the inventory created from ${csvFileName ?? "your CSV file"}.`
+                ? `Details of the inventory created from ${result.csvFileName ?? "your CSV file"}.`
                 : "Details of the inventory created in this stock-in session."}
             </p>
 
@@ -185,9 +235,9 @@ export default function StockInCompletePage() {
                   <div className="ss-icon ss-icon-purple"><Tag size={18} /></div>
                   <div className="ss-text">
                     <strong>CSV Rows Imported</strong>
-                    <span>Valid rows processed from {csvFileName ?? "the uploaded file"}</span>
+                    <span>Valid rows processed from {result.csvFileName ?? "the uploaded file"}</span>
                   </div>
-                  <span className="ss-value ss-green">{csvRowCount ?? "—"}</span>
+                  <span className="ss-value ss-green">{result.csvRowCount ?? "—"}</span>
                 </div>
               )}
 
@@ -197,7 +247,7 @@ export default function StockInCompletePage() {
                   <strong>Inventory Records Created</strong>
                   <span>Total inventory items added to the system</span>
                 </div>
-                <span className="ss-value ss-green">{totalItems ?? "—"}</span>
+                <span className="ss-value ss-green">{result.itemsCreated}</span>
               </div>
 
               <div className="summary-stat-row">
@@ -206,7 +256,7 @@ export default function StockInCompletePage() {
                   <strong>Asset IDs Generated</strong>
                   <span>Unique asset IDs generated for items</span>
                 </div>
-                <span className="ss-value ss-green">{totalItems ?? "—"}</span>
+                <span className="ss-value ss-green">{result.totalAssetIds}</span>
               </div>
 
               <div className="summary-stat-row">
@@ -215,7 +265,7 @@ export default function StockInCompletePage() {
                   <strong>Sticker Queue Entries</strong>
                   <span>Items added to sticker queue for printing</span>
                 </div>
-                <span className="ss-value ss-orange">{totalItems ?? "—"}</span>
+                <span className="ss-value ss-orange">{result.itemsCreated}</span>
               </div>
 
               <div className="summary-stat-row">
@@ -224,9 +274,21 @@ export default function StockInCompletePage() {
                   <strong>Shipment Reconciliation Updated</strong>
                   <span>Shipment received quantity updated</span>
                 </div>
-                <span className="ss-value ss-green">+{totalItems ?? "—"}</span>
+                <span className="ss-value ss-green">+{result.itemsCreated}</span>
               </div>
             </div>
+
+            {result.assetIds.length > 0 && (
+              <div className="asset-id-preview">
+                <strong>Asset ID Preview</strong>
+                <p>
+                  {result.assetIds.join(", ")}
+                  {result.totalAssetIds > result.assetIds.length
+                    ? ` … and ${result.totalAssetIds - result.assetIds.length} more`
+                    : ""}
+                </p>
+              </div>
+            )}
 
             {/* Reconciliation callout */}
             <div className={`reconciliation-callout ${isFullyReconciled ? "callout-complete" : "callout-partial"}`}>
@@ -234,13 +296,13 @@ export default function StockInCompletePage() {
               <span>
                 Shipment Capacity:{" "}
                 <strong>
-                  {prevReceived} + {totalItems} = {newTotal} / {sent}
-                  {isFullyReconciled ? " (100%)" : ` (${Math.round((newTotal / sent) * 100)}%)`}
+                  {reconciliation.itemsReceived} / {reconciliation.itemsSent}
+                  {" "}({reconciliation.percentageReceived.toFixed(2)}%)
                 </strong>
                 <br />
                 {isFullyReconciled
                   ? "All items have been successfully accounted for in this shipment."
-                  : `${sent - newTotal} item${sent - newTotal !== 1 ? "s" : ""} still pending for this shipment.`}
+                  : `${reconciliation.remaining} item${reconciliation.remaining !== 1 ? "s" : ""} still pending for this shipment.`}
               </span>
             </div>
           </div>
@@ -260,15 +322,15 @@ export default function StockInCompletePage() {
               {/* Event list */}
               <div className="event-list">
                 {[
-                  { title: "Batch ID Generated",            desc: `Batch ID ${batchId} has been created for this session.` },
-                  { title: "Asset IDs Generated",           desc: `${totalItems} unique asset IDs have been generated.` },
-                  { title: "Inventory Records Created",     desc: `${totalItems} inventory records have been created in the system.` },
-                  { title: "Sticker Queue Updated",         desc: `${totalItems} items have been added to the sticker queue.` },
-                  { title: "Shipment Reconciliation Updated", desc: `Shipment ${shipment.shipmentId} received quantity has been updated.` },
+                  { title: "Batch ID Generated",            desc: `Batch ID ${result.batchId} has been created for this session.` },
+                  { title: "Asset IDs Generated",           desc: `${result.totalAssetIds} unique asset IDs have been generated.` },
+                  { title: "Inventory Records Created",     desc: `${result.itemsCreated} inventory records have been created in the system.` },
+                  { title: "Sticker Queue Updated",         desc: `${result.itemsCreated} items have been added to the sticker queue.` },
+                  { title: "Shipment Reconciliation Updated", desc: `Shipment ${result.shipmentId} received quantity has been updated.` },
                   {
                     title: isCsv ? "CSV Import Saved" : "Upload Session Saved",
                     desc: isCsv
-                      ? `${csvFileName ?? "Your CSV file"} has been saved to import history.`
+                      ? `${result.csvFileName ?? "Your CSV file"} has been saved to import history.`
                       : "Session details have been saved to the system.",
                   },
                 ].map((event) => (
@@ -317,7 +379,7 @@ export default function StockInCompletePage() {
       <div className="next-actions-card">
         <h2>What would you like to do next?</h2>
         <div className="next-actions-grid">
-          <button className="next-action-btn" onClick={() => navigate("/stock-overview")}>
+          <button className="next-action-btn" onClick={() => navigate(`/stock-in/${shipmentId}/inventory`)}>
             <div className="na-icon na-icon-blue"><List size={18} /></div>
             <div className="na-text">
               <strong>View Imported Inventory</strong>
@@ -326,7 +388,7 @@ export default function StockInCompletePage() {
             <ArrowRight size={16} className="na-arrow" />
           </button>
 
-          <button className="next-action-btn" onClick={() => navigate("/sticker-queue")}>
+          <button className="next-action-btn" onClick={() => navigate(`/stock-in/${shipmentId}`)}>
             <div className="na-icon na-icon-orange"><Printer size={18} /></div>
             <div className="na-text">
               <strong>Open Sticker Queue</strong>
@@ -359,7 +421,7 @@ export default function StockInCompletePage() {
       <div className="complete-info-footer">
         <Info size={15} />
         You can always find this batch using the Batch ID:{" "}
-        <strong>{batchId ?? "—"}</strong> in inventory search or batch history.
+        <strong>{result.batchId}</strong> in inventory search or batch history.
       </div>
     </div>
   );

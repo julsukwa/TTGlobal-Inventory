@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,19 +15,46 @@ import {
 } from "lucide-react";
 
 import "./ManualStockInPage.css";
-import { stockInShipments } from "./mockStockIn";
+import { apiFetch } from "../../services/api";
+import type { Shipment } from "../shipments/shipmentTypes";
 import type { ListNumberGroup, SessionInventoryItem } from "./manualStockInTypes";
+import { toStockInApiItem, type StockInResult } from "./stockInApi";
 
-// ─── Fixed dropdown option sets ────────────────────────────────────────────────
-// NOTE FOR BACKEND INTEGRATION: these option sets (category, condition, comment)
-// are hardcoded here as a stand-in. Once the Dropdown Management module is
-// backed by a real API, these fields should become <select> inputs populated
-// from GET /dropdowns/itemType, GET /dropdowns/condition, etc. — replacing the
-// hardcoded arrays below with fetched data, same component shape otherwise.
+// ─── Dropdown-backed option sets ───────────────────────────────────────────────
+// Category, Brand, Processor, Generation, RAM, Storage and Condition are all
+// fetched from GET /dropdowns/active/:category on mount (see loadDropdownOptions
+// below). Comment (screen type) has no backend dropdown category, so it stays
+// a fixed local option set.
 
-const CATEGORY_OPTIONS = ["Laptop", "Desktop", "All In One", "Workstation", "LCD"];
-const CONDITION_OPTIONS = ["New", "Refurb", "Used"];
 const SCREEN_TYPE_OPTIONS = ["Touch Screen", "Non-Touch"];
+
+interface DropdownRow {
+  id: number;
+  category: string;
+  value: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface DropdownOptions {
+  category: string[];
+  brand: string[];
+  processor: string[];
+  generation: string[];
+  ram: string[];
+  storage: string[];
+  condition: string[];
+}
+
+const blankDropdownOptions: DropdownOptions = {
+  category: [],
+  brand: [],
+  processor: [],
+  generation: [],
+  ram: [],
+  storage: [],
+  condition: [],
+};
 
 // LCD only needs Brand, Model, Comment, Quantity — no tech-spec fields
 const isLCDCategory = (category: string) => category === "LCD";
@@ -102,9 +129,44 @@ export default function ManualStockInPage() {
   const navigate = useNavigate();
   const { shipmentId } = useParams();
 
-  const shipment = stockInShipments.find(
-    (item) => item.shipmentId === shipmentId
-  );
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(true);
+  const [shipmentError, setShipmentError] = useState<string | null>(null);
+
+  const [dropdownOptions, setDropdownOptions] = useState<DropdownOptions>(blankDropdownOptions);
+  const [dropdownsLoading, setDropdownsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shipmentId) return;
+    setShipmentLoading(true);
+    setShipmentError(null);
+    apiFetch<Shipment>(`/shipments/${shipmentId}`)
+      .then(setShipment)
+      .catch((err: Error) => setShipmentError(err.message))
+      .finally(() => setShipmentLoading(false));
+  }, [shipmentId]);
+
+  useEffect(() => {
+    const fetchValues = (category: string) =>
+      apiFetch<DropdownRow[]>(`/dropdowns/active/${category}`)
+        .then((rows) => rows.map((row) => row.value))
+        .catch(() => [] as string[]);
+
+    setDropdownsLoading(true);
+    Promise.all([
+      fetchValues("ItemType"),
+      fetchValues("Brand"),
+      fetchValues("Processor"),
+      fetchValues("Generation"),
+      fetchValues("RAM"),
+      fetchValues("Storage"),
+      fetchValues("Condition"),
+    ])
+      .then(([category, brand, processor, generation, ram, storage, condition]) => {
+        setDropdownOptions({ category, brand, processor, generation, ram, storage, condition });
+      })
+      .finally(() => setDropdownsLoading(false));
+  }, []);
 
   const [sessionItems, setSessionItems] = useState<SessionInventoryItem[]>([]);
   const [form, setForm] = useState<FormState>(blankForm);
@@ -113,6 +175,8 @@ export default function ManualStockInPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Groups session items by List Number, preserving each group's first-seen
   // order, so the session table can render a section header per group even
@@ -141,10 +205,18 @@ export default function ManualStockInPage() {
     });
   }, [sessionItems]);
 
-  if (!shipment) {
+  if (shipmentLoading) {
     return (
       <div className="manual-page">
-        <h2>Shipment not found.</h2>
+        <h2>Loading shipment...</h2>
+      </div>
+    );
+  }
+
+  if (shipmentError || !shipment) {
+    return (
+      <div className="manual-page">
+        <h2>{shipmentError ? `Failed to load shipment: ${shipmentError}` : "Shipment not found."}</h2>
       </div>
     );
   }
@@ -297,17 +369,31 @@ export default function ManualStockInPage() {
       setError("Add at least one item before confirming stock-in.");
       return;
     }
+    setSubmitError(null);
     setShowConfirmModal(true);
   };
 
-  const finaliseStockIn = () => {
-    setShowConfirmModal(false);
-    // Pass session items through navigation state so the processing page
-    // knows what to process. The backend developer will replace the simulated
-    // processing with real API calls on StockInProcessingPage.
-    navigate(`/stock-in/${shipment!.shipmentId}/processing`, {
-      state: { sessionItems },
-    });
+  const finaliseStockIn = async () => {
+    if (!shipment) return;
+
+    setConfirming(true);
+    setSubmitError(null);
+
+    try {
+      const items = sessionItems.map(toStockInApiItem);
+      const result = await apiFetch<StockInResult>("/stock-in/manual", {
+        method: "POST",
+        body: JSON.stringify({ shipmentId: shipment.id, items }),
+      });
+
+      navigate(`/stock-in/${shipment.id}/complete`, {
+        state: { ...result, source: "manual" },
+      });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to process stock-in.");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   // ─── Confirm-modal Asset ID summary text ───────────────────────────────────
@@ -366,7 +452,7 @@ export default function ManualStockInPage() {
         </div>
         <button
           className="manual-back-btn"
-          onClick={() => navigate(`/stock-in/${shipment.shipmentId}`)}
+          onClick={() => navigate(`/stock-in/${shipment.id}`)}
         >
           <ArrowLeft size={14} />
           Back to Workspace
@@ -393,7 +479,7 @@ export default function ManualStockInPage() {
           </div>
           <div>
             <span>Vendor</span>
-            <h3>{shipment.vendor}</h3>
+            <h3>{shipment.vendor.vendorId}</h3>
           </div>
         </div>
 
@@ -449,7 +535,7 @@ export default function ManualStockInPage() {
           </div>
           <div>
             <span>Received Date</span>
-            <h3>{shipment.shipmentReceivedDate}</h3>
+            <h3>{new Date(shipment.shipmentReceivedDate).toLocaleDateString("en-GB", { timeZone: "UTC" })}</h3>
           </div>
         </div>
       </div>
@@ -584,9 +670,12 @@ export default function ManualStockInPage() {
               name="category"
               value={form.category}
               onChange={handleChange}
+              disabled={dropdownsLoading}
             >
-              <option value="">Select category</option>
-              {CATEGORY_OPTIONS.map((opt) => (
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select category"}
+              </option>
+              {dropdownOptions.category.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt}
                 </option>
@@ -603,9 +692,12 @@ export default function ManualStockInPage() {
               name="condition"
               value={form.condition}
               onChange={handleChange}
+              disabled={dropdownsLoading}
             >
-              <option value="">Select condition</option>
-              {CONDITION_OPTIONS.map((opt) => (
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select condition"}
+              </option>
+              {dropdownOptions.condition.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt}
                 </option>
@@ -618,12 +710,21 @@ export default function ManualStockInPage() {
             <label>
               Brand <span className="required">*</span>
             </label>
-            <input
+            <select
               name="brand"
               value={form.brand}
               onChange={handleChange}
-              placeholder="e.g. HP, Dell, Lenovo"
-            />
+              disabled={dropdownsLoading}
+            >
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select brand"}
+              </option>
+              {dropdownOptions.brand.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Model */}
@@ -643,12 +744,21 @@ export default function ManualStockInPage() {
           {!isLCD && (
           <div className="form-field">
             <label>Processor <span className="required">*</span></label>
-            <input
+            <select
               name="processor"
               value={form.processor}
               onChange={handleChange}
-              placeholder="e.g. Intel Core i5"
-            />
+              disabled={dropdownsLoading}
+            >
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select processor"}
+              </option>
+              {dropdownOptions.processor.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
           )}
 
@@ -656,12 +766,21 @@ export default function ManualStockInPage() {
           {!isLCD && (
           <div className="form-field">
             <label>Generation</label>
-            <input
+            <select
               name="generation"
               value={form.generation}
               onChange={handleChange}
-              placeholder="e.g. 11th Gen"
-            />
+              disabled={dropdownsLoading}
+            >
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select generation"}
+              </option>
+              {dropdownOptions.generation.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
           )}
 
@@ -669,12 +788,21 @@ export default function ManualStockInPage() {
           {!isLCD && (
           <div className="form-field">
             <label>RAM <span className="required">*</span></label>
-            <input
+            <select
               name="ram"
               value={form.ram}
               onChange={handleChange}
-              placeholder="e.g. 8GB"
-            />
+              disabled={dropdownsLoading}
+            >
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select RAM"}
+              </option>
+              {dropdownOptions.ram.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
           )}
 
@@ -682,12 +810,21 @@ export default function ManualStockInPage() {
           {!isLCD && (
           <div className="form-field">
             <label>Storage <span className="required">*</span></label>
-            <input
+            <select
               name="storage"
               value={form.storage}
               onChange={handleChange}
-              placeholder="e.g. 256GB SSD"
-            />
+              disabled={dropdownsLoading}
+            >
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select storage"}
+              </option>
+              {dropdownOptions.storage.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
           )}
 
@@ -933,7 +1070,7 @@ export default function ManualStockInPage() {
       {showConfirmModal && (
         <div
           className="modal-overlay"
-          onClick={() => setShowConfirmModal(false)}
+          onClick={() => !confirming && setShowConfirmModal(false)}
         >
           <div
             className="manual-modal"
@@ -963,18 +1100,21 @@ export default function ManualStockInPage() {
             <p className="modal-sub">
               {assetIdSummaryText} This action cannot be undone.
             </p>
+            {submitError && <div className="form-error">{submitError}</div>}
             <div className="modal-actions">
               <button
                 className="modal-cancel"
                 onClick={() => setShowConfirmModal(false)}
+                disabled={confirming}
               >
                 Go Back
               </button>
               <button
                 className="modal-confirm"
                 onClick={finaliseStockIn}
+                disabled={confirming}
               >
-                Yes, Confirm Stock-In
+                {confirming ? "Processing..." : "Yes, Confirm Stock-In"}
               </button>
             </div>
           </div>
