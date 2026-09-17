@@ -32,6 +32,7 @@ interface LoginResponse {
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -44,19 +45,27 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Restore a previous session on mount so a page refresh doesn't log the
-  // user out.
+  // user out. isLoading stays true until this completes, so route guards
+  // can wait for it instead of momentarily seeing isAuthenticated: false.
   useEffect(() => {
     const storedUser = localStorage.getItem(USER_STORAGE_KEY);
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!storedUser || !storedToken) return;
+
+    if (!storedUser || !storedToken) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setUser(JSON.parse(storedUser) as AuthUser);
     } catch {
       localStorage.removeItem(USER_STORAGE_KEY);
       localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -84,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     user,
     isAuthenticated: user !== null,
+    isLoading,
     login,
     logout,
   };

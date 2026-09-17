@@ -1,16 +1,24 @@
+export interface ShipmentVendor {
+  id: number;
+  vendorId: string;
+  name: string;
+}
+
+export type ShipmentStatus = "PENDING" | "IN_PROGRESS" | "COMPLETE";
+
+// Matches the shape returned by GET /shipments and GET /shipments/:id.
+// Inventory Remaining is not part of the API response — it's derived on the
+// frontend as itemsReceived - issuedCount wherever it's displayed.
 export interface Shipment {
   id: number;
   shipmentId: string;
   shipmentName: string;
-  vendor: string;
+  vendor: ShipmentVendor;
   itemsSent: number;
   itemsReceived: number;
-  // Derived inventory status counts — computed from the inventory records
-  // belonging to this shipment. Post-backend these come from the API;
-  // for now they are held in the mock and updated optimistically.
-  okCount: number;      // items with status "Ok"
-  faultyCount: number;  // items with status "Faulty"
-  issuedCount: number;  // items with status "Issued" (sold via Stock Out)
-  shipmentReceivedDate: string;
-  status: "Pending" | "In Progress" | "Complete";
+  issuedCount: number;
+  status: ShipmentStatus;
+  shipmentReceivedDate: string; // ISO date string
+  remarks: string;
+  createdAt: string;
 }

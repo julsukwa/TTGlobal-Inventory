@@ -1,8 +1,15 @@
+// ─── Shipments Page ─────────────────────────────────────────────────────────
+//
+// Lists all shipments with reconciliation data (items received, issued and
+// remaining) and lets admins create, edit and delete shipment records.
+//
+// Backed by the real /shipments API. Search is server-side (debounced); the
+// status filter is applied client-side on top of the fetched list.
+
 import "./ShipmentPage.css";
 import { useEffect, useState } from "react";
 
-import mockShipments from "./mockShipments";
-import type { Shipment } from "./shipmentTypes";
+import type { Shipment, ShipmentStatus } from "./shipmentTypes";
 
 import {
   Search,
@@ -22,23 +29,117 @@ interface Vendor {
   createdAt: string;
 }
 
-function ShipmentPage() {
+const STATUS_LABELS: Record<ShipmentStatus, string> = {
+  PENDING: "Pending",
+  IN_PROGRESS: "In Progress",
+  COMPLETE: "Complete",
+};
 
-  const [shipments, setShipments] = useState<Shipment[]>(mockShipments);
+const STATUS_CLASSES: Record<ShipmentStatus, string> = {
+  PENDING: "status-pending",
+  IN_PROGRESS: "status-progress",
+  COMPLETE: "status-complete",
+};
+
+// Shipments are stored/received as UTC-midnight ISO strings — read/write the
+// date-only value with UTC getters/setters so the displayed day never shifts
+// with the viewer's timezone.
+function formatDateDMY(iso: string) {
+  const date = new Date(iso);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function toDateInputValue(iso: string) {
+  const date = new Date(iso);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toIsoDate(dateInputValue: string) {
+  return new Date(`${dateInputValue}T00:00:00.000Z`).toISOString();
+}
+
+function ShipmentPage() {
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | ShipmentStatus>("All");
+
   const [showModal, setShowModal] = useState(false);
   const [shipmentId, setShipmentId] = useState("");
   const [shipmentName, setShipmentName] = useState("");
-  const [vendor, setVendor] = useState("");
+  const [vendorId, setVendorId] = useState("");
   const [itemsSent, setItemsSent] = useState("");
   const [shipmentDate, setShipmentDate] = useState("");
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
-  const [deleteBlocked, setDeleteBlocked] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("All");
 
-  const closeModal = () => { setShowModal(false); setEditingShipment(null); };
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+
+  useEffect(() => {
+    apiFetch<Vendor[]>("/vendors/active")
+      .then(setVendors)
+      .catch(() => {
+        // The vendor dropdown just stays empty on failure.
+      });
+  }, []);
+
+  // Fetches on mount (searchTerm starts empty) and again, debounced, whenever
+  // the search box changes — the backend matches shipmentId/shipmentName.
+  useEffect(() => {
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const query = searchTerm.trim();
+      const endpoint = query ? `/shipments?search=${encodeURIComponent(query)}` : "/shipments";
+
+      apiFetch<Shipment[]>(endpoint)
+        .then((data) => {
+          if (!cancelled) setShipments(data);
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchTerm]);
+
+  const resetForm = () => {
+    setShipmentId("");
+    setShipmentName("");
+    setVendorId("");
+    setItemsSent("");
+    setShipmentDate("");
+    setEditingShipment(null);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setApiError(null);
+    resetForm();
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -47,116 +148,95 @@ function ShipmentPage() {
     }
   };
 
-  const getStatusClass = (status: string) => {
-    switch (status) {
-      case "Complete":   return "status-complete";
-      case "In Progress": return "status-progress";
-      default:           return "status-pending";
-    }
-  };
-
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-
-  useEffect(() => {
-    apiFetch<Vendor[]>("/vendors/active")
-      .then(setVendors)
-      .catch(() => {
-        // The vendor dropdown just stays empty on failure — the rest of the
-        // page (shipment table) is unaffected since it's still mock-backed.
-      });
-  }, []);
-
-  const handleSaveShipment = () => {
-    if (
-      !shipmentId.trim() ||
-      !shipmentName.trim() ||
-      !vendor ||
-      !itemsSent ||
-      !shipmentDate
-    ) {
-      alert("Please complete all fields.");
+  const handleSaveShipment = async () => {
+    if (!shipmentId.trim() || !shipmentName.trim() || !vendorId || !itemsSent || !shipmentDate) {
+      setApiError("Please complete all fields.");
       return;
     }
 
-    if (editingShipment) {
-      const updatedShipments = shipments.map((s) =>
-        s.id === editingShipment.id
-          ? {
-              ...s,
-              shipmentId,
-              shipmentName,
-              vendor,
-              itemsSent: Number(itemsSent),
-              shipmentReceivedDate: new Date(shipmentDate).toLocaleDateString("en-GB"),
-            }
-          : s
-      );
-      setShipments(updatedShipments);
-    } else {
-      const newShipment: Shipment = {
-        id: shipments.length + 1,
-        shipmentId,
-        shipmentName,
-        vendor,
-        itemsSent: Number(itemsSent),
-        itemsReceived: 0,
-        okCount: 0,
-        faultyCount: 0,
-        issuedCount: 0,
-        shipmentReceivedDate: new Date(shipmentDate).toLocaleDateString("en-GB"),
-        status: "Pending",
-      };
-      setShipments([newShipment, ...shipments]);
+    const itemsSentNum = Number(itemsSent);
+    if (!Number.isInteger(itemsSentNum) || itemsSentNum <= 0) {
+      setApiError("Items Sent must be a positive integer.");
+      return;
     }
 
-    setShipmentId("");
-    setShipmentName("");
-    setVendor("");
-    setItemsSent("");
-    setShipmentDate("");
-    setEditingShipment(null);
-    setShowModal(false);
+    setSaving(true);
+    setApiError(null);
+
+    try {
+      if (editingShipment) {
+        const payload = {
+          shipmentName: shipmentName.trim(),
+          vendorId: Number(vendorId),
+          itemsSent: itemsSentNum,
+          shipmentReceivedDate: toIsoDate(shipmentDate),
+        };
+        const updated = await apiFetch<Shipment>(`/shipments/${editingShipment.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        setShipments((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      } else {
+        const payload = {
+          shipmentId: shipmentId.trim(),
+          shipmentName: shipmentName.trim(),
+          vendorId: Number(vendorId),
+          itemsSent: itemsSentNum,
+          shipmentReceivedDate: toIsoDate(shipmentDate),
+        };
+        const created = await apiFetch<Shipment>("/shipments", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setShipments((prev) => [created, ...prev]);
+      }
+
+      resetForm();
+      setShowModal(false);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to save shipment.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const filteredShipments = shipments.filter((shipment) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      shipment.shipmentId.toLowerCase().includes(search) ||
-      shipment.shipmentName.toLowerCase().includes(search) ||
-      shipment.vendor.toLowerCase().includes(search);
-    const matchesStatus =
-      statusFilter === "All" || shipment.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredShipments = shipments.filter(
+    (shipment) => statusFilter === "All" || shipment.status === statusFilter
+  );
 
   const handleEditShipment = (shipment: Shipment) => {
     setEditingShipment(shipment);
     setShipmentId(shipment.shipmentId);
     setShipmentName(shipment.shipmentName);
-    setVendor(shipment.vendor);
+    setVendorId(String(shipment.vendor.id));
     setItemsSent(shipment.itemsSent.toString());
-    const [day, month, year] = shipment.shipmentReceivedDate.split("/");
-    setShipmentDate(`${year}-${month}-${day}`);
+    setShipmentDate(toDateInputValue(shipment.shipmentReceivedDate));
+    setApiError(null);
     setShowModal(true);
   };
 
   const handleDeleteShipment = (shipment: Shipment) => {
-    if (shipment.itemsReceived > 0) {
-      setShipmentToDelete(shipment);
-      setDeleteBlocked(true);
-      setShowDeleteModal(true);
-      return;
-    }
     setShipmentToDelete(shipment);
-    setDeleteBlocked(false);
+    setApiError(null);
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteShipment = () => {
+  const confirmDeleteShipment = async () => {
     if (!shipmentToDelete) return;
-    setShipments(shipments.filter((s) => s.id !== shipmentToDelete.id));
-    setShipmentToDelete(null);
-    setShowDeleteModal(false);
+
+    setDeleting(true);
+    setApiError(null);
+
+    try {
+      await apiFetch(`/shipments/${shipmentToDelete.id}`, { method: "DELETE" });
+      setShipments((prev) => prev.filter((s) => s.id !== shipmentToDelete.id));
+      setShipmentToDelete(null);
+      setShowDeleteModal(false);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to delete shipment.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -168,11 +248,20 @@ function ShipmentPage() {
           <h1>Shipments</h1>
           <p>Track incoming shipments and reconcile received inventory.</p>
         </div>
-        <button className="shipment-add-btn" onClick={() => setShowModal(true)}>
+        <button
+          className="shipment-add-btn"
+          onClick={() => {
+            resetForm();
+            setApiError(null);
+            setShowModal(true);
+          }}
+        >
           <Plus size={16} />
           New Shipment
         </button>
       </div>
+
+      {apiError && !showModal && !showDeleteModal && <p className="field-error">{apiError}</p>}
 
       {/* Table Card */}
       <div className="shipment-table-card">
@@ -183,7 +272,7 @@ function ShipmentPage() {
             <Search size={16} />
             <input
               type="text"
-              placeholder="Search shipment ID, shipment name or vendor..."
+              placeholder="Search shipment ID or shipment name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -191,12 +280,12 @@ function ShipmentPage() {
           <div className="shipment-filter">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value as "All" | ShipmentStatus)}
             >
               <option value="All">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Complete">Complete</option>
+              <option value="PENDING">Pending</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="COMPLETE">Complete</option>
             </select>
           </div>
         </div>
@@ -218,58 +307,73 @@ function ShipmentPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredShipments.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={10} className="no-results">
+                  Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={10} className="no-results">
+                  Failed to load shipments: {error}
+                </td>
+              </tr>
+            ) : filteredShipments.length === 0 ? (
               <tr>
                 <td colSpan={10} className="no-results">
                   No shipments found.
                 </td>
               </tr>
             ) : (
-              filteredShipments.map((shipment) => (
-                <tr key={shipment.id}>
-                  <td className="shipment-id">{shipment.shipmentId}</td>
-                  <td>{shipment.shipmentName}</td>
-                  <td>{shipment.vendor}</td>
-                  <td>{shipment.itemsSent}</td>
-                  <td>{shipment.itemsReceived}</td>
-                  
-                  <td>
-                    <span className={`count-badge ${shipment.issuedCount > 0 ? "count-issued" : "count-zero"}`}>
-                      {shipment.issuedCount}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`count-badge ${shipment.itemsReceived - shipment.issuedCount > 0 ? "count-remaining" : "count-zero"}`}>
-                      {shipment.itemsReceived - shipment.issuedCount}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`status-badge ${getStatusClass(shipment.status)}`}>
-                      {shipment.status}
-                    </span>
-                  </td>
-                  <td>{shipment.shipmentReceivedDate}</td>
-                  <td>
-                    <div className="shipment-actions">
-                      <button className="action-btn view-btn">
-                        <Eye size={15} />
-                      </button>
-                      <button
-                        className="action-btn edit-btn"
-                        onClick={() => handleEditShipment(shipment)}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        className="action-btn delete-btn"
-                        onClick={() => handleDeleteShipment(shipment)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              filteredShipments.map((shipment) => {
+                const remaining = shipment.itemsReceived - shipment.issuedCount;
+                return (
+                  <tr key={shipment.id}>
+                    <td className="shipment-id">{shipment.shipmentId}</td>
+                    <td>{shipment.shipmentName}</td>
+                    <td>{shipment.vendor.vendorId}</td>
+                    <td>{shipment.itemsSent}</td>
+                    <td>{shipment.itemsReceived}</td>
+
+                    <td>
+                      <span className={`count-badge ${shipment.issuedCount > 0 ? "count-issued" : "count-zero"}`}>
+                        {shipment.issuedCount}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`count-badge ${remaining > 0 ? "count-remaining" : "count-zero"}`}>
+                        {remaining}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${STATUS_CLASSES[shipment.status]}`}>
+                        {STATUS_LABELS[shipment.status]}
+                      </span>
+                    </td>
+                    <td>{formatDateDMY(shipment.shipmentReceivedDate)}</td>
+                    <td>
+                      <div className="shipment-actions">
+                        <button className="action-btn view-btn">
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          className="action-btn edit-btn"
+                          onClick={() => handleEditShipment(shipment)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="action-btn delete-btn"
+                          onClick={() => handleDeleteShipment(shipment)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -301,6 +405,8 @@ function ShipmentPage() {
                   value={shipmentId}
                   onChange={(e) => setShipmentId(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  readOnly={!!editingShipment}
+                  disabled={!!editingShipment}
                 />
               </div>
               <div className="form-field">
@@ -314,12 +420,12 @@ function ShipmentPage() {
               <div className="form-field">
                 <label>Vendor *</label>
                 <select
-                  value={vendor}
-                  onChange={(e) => setVendor(e.target.value)}
+                  value={vendorId}
+                  onChange={(e) => setVendorId(e.target.value)}
                 >
                   <option value="">Select Vendor</option>
                   {vendors.map((v) => (
-                    <option key={v.vendorId} value={v.vendorId}>{`${v.vendorId} — ${v.name}`}</option>
+                    <option key={v.id} value={v.id}>{`${v.vendorId} — ${v.name}`}</option>
                   ))}
                 </select>
               </div>
@@ -342,12 +448,13 @@ function ShipmentPage() {
                 />
               </div>
             </div>
+            {apiError && <p className="field-error">{apiError}</p>}
             <div className="modal-actions">
-              <button className="modal-cancel" onClick={closeModal}>
+              <button className="modal-cancel" onClick={closeModal} disabled={saving}>
                 Cancel
               </button>
-              <button className="modal-save" onClick={handleSaveShipment}>
-                {editingShipment ? "Update Shipment" : "Create Shipment"}
+              <button className="modal-save" onClick={handleSaveShipment} disabled={saving}>
+                {saving ? "Saving..." : editingShipment ? "Update Shipment" : "Create Shipment"}
               </button>
             </div>
           </div>
@@ -367,50 +474,32 @@ function ShipmentPage() {
             className="delete-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            {deleteBlocked ? (
-              <>
-                <h2>Shipment Cannot Be Deleted</h2>
-                <p>This shipment already contains received inventory.</p>
-                <span>Only shipments with zero received items can be deleted.</span>
-                <div className="delete-actions">
-                  <button
-                    className="modal-cancel"
-                    onClick={() => {
-                      setShowDeleteModal(false);
-                      setShipmentToDelete(null);
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2>Delete Shipment</h2>
-                <p>
-                  Are you sure you want to delete{" "}
-                  <strong>{shipmentToDelete?.shipmentId}</strong>?
-                </p>
-                <span>This action cannot be undone.</span>
-                <div className="delete-actions">
-                  <button
-                    className="modal-cancel"
-                    onClick={() => {
-                      setShowDeleteModal(false);
-                      setShipmentToDelete(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="delete-confirm-btn"
-                    onClick={confirmDeleteShipment}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
+            <h2>Delete Shipment</h2>
+            <p>
+              Are you sure you want to delete{" "}
+              <strong>{shipmentToDelete?.shipmentId}</strong>?
+            </p>
+            <span>This action cannot be undone.</span>
+            {apiError && <p className="field-error">{apiError}</p>}
+            <div className="delete-actions">
+              <button
+                className="modal-cancel"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setShipmentToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="delete-confirm-btn"
+                onClick={confirmDeleteShipment}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}
