@@ -8,6 +8,7 @@ import { CustomersModule } from './customers/customers.module.js';
 import { DropdownsModule } from './dropdowns/dropdowns.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
+import { StaffModule } from './staff/staff.module.js';
 import { VendorsModule } from './vendors/vendors.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -28,6 +29,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     VendorsModule,
     CustomersModule,
     ShipmentsModule,
+    StaffModule,
   ],
   controllers: [AppController],
   providers: [AppService],

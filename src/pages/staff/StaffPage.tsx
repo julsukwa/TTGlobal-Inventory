@@ -8,17 +8,12 @@
 // Business rules:
 //   - The username "admin" is the protected system administrator account —
 //     it can never be deactivated or deleted (those options are hidden for
-//     that row).
-//   - New accounts are created with status "Active", dateCreated = today,
-//     and lastLogin = "Never".
-//   - Staff-role accounts can only view the stock list and download reports;
-//     they cannot add users or update inventory (see the info banner below
-//     and the note inside the Add Staff modal).
+//     that row, and the backend also rejects it with 403 defense-in-depth).
 //   - Passwords are write-only — StaffMember never carries a password field,
 //     and every password input uses type="password" so it is always masked.
 //
-// BACKEND INTEGRATION SEAM: see staffTypes.ts for the planned REST endpoints.
-// Everything here runs against local state seeded from mockStaff.
+// Backed by the real /staff API. Search is server-side (debounced); role and
+// status filters are applied client-side on top of the fetched list.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -34,12 +29,12 @@ import {
 } from "lucide-react";
 
 import "./StaffPage.css";
-import mockStaff from "./mockStaff";
-import type { StaffMember } from "./staffTypes";
+import type { StaffMember, StaffRole } from "./staffTypes";
+import { apiFetch } from "../../services/api";
 
 import { Modal, StatusBadge, SearchBar, Pagination, Button } from "../../components/ui";
 
-type RoleFilter = "All" | StaffMember["role"];
+type RoleFilter = "All" | StaffRole;
 type StatusFilterValue = "All" | StaffMember["status"];
 
 const ITEMS_PER_PAGE = 5;
@@ -50,46 +45,59 @@ const blankAddForm = {
   password: "",
   confirmPassword: "",
   email: "",
-  role: "sales" as StaffMember["role"],
+  role: "STAFF_SALES" as StaffRole,
 };
 
 type AddForm = typeof blankAddForm;
 type AddFormErrors = Partial<Record<keyof AddForm, string>>;
 
-const ROLE_LABELS: Record<StaffMember["role"], string> = {
-  admin: "Admin",
-  sales: "Sales",
-  warehouse: "Warehouse",
-  warranty: "Warranty",
+const ROLE_LABELS: Record<StaffRole, string> = {
+  ADMIN: "Admin",
+  STAFF_SALES: "Sales",
+  STAFF_WAREHOUSE: "Warehouse",
+  STAFF_WARRANTY: "Warranty",
 };
 
-const ROLE_BADGE_CLASSES: Record<StaffMember["role"], string> = {
-  admin: "staff-role-admin",
-  sales: "staff-role-sales",
-  warehouse: "staff-role-warehouse",
-  warranty: "staff-role-warranty",
+const ROLE_BADGE_CLASSES: Record<StaffRole, string> = {
+  ADMIN: "staff-role-admin",
+  STAFF_SALES: "staff-role-sales",
+  STAFF_WAREHOUSE: "staff-role-warehouse",
+  STAFF_WARRANTY: "staff-role-warranty",
 };
 
-/** Parses the mock "DD/MM/YYYY hh:mm AM/PM" lastLogin format into a Date for
- * comparison. Returns null for "Never" or anything else unparseable. */
-function parseLastLogin(value: string): Date | null {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return null;
+const STATUS_LABELS: Record<StaffMember["status"], string> = {
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
+};
 
-  const [, dd, mm, yyyy, hh, min, ampm] = match;
-  let hour = Number(hh) % 12;
-  if (ampm.toUpperCase() === "PM") hour += 12;
+function formatDate(d: Date): string {
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${d.getFullYear()}`;
+}
 
-  return new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, Number(min));
+function formatDateTime(d: Date): string {
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${formatDate(d)} ${hours}:${minutes}`;
+}
+
+function formatLastLogin(lastLogin: string | null): string {
+  return lastLogin ? formatDateTime(new Date(lastLogin)) : "Never";
 }
 
 export default function StaffPage() {
-  const [staff, setStaff] = useState<StaffMember[]>(mockStaff);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("All");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const openMenuRef = useRef<HTMLDivElement>(null);
 
   // Close the open three-dot menu on any click outside it. The ref is
@@ -110,9 +118,41 @@ export default function StaffPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId]);
 
+  // Fetches on mount (searchTerm starts empty) and again, debounced, whenever
+  // the search box changes — the backend matches fullName/username.
+  useEffect(() => {
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const query = searchTerm.trim();
+      const endpoint = query ? `/staff?search=${encodeURIComponent(query)}` : "/staff";
+
+      apiFetch<StaffMember[]>(endpoint)
+        .then((data) => {
+          if (!cancelled) setStaff(data);
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchTerm]);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddForm>(blankAddForm);
   const [addFormErrors, setAddFormErrors] = useState<AddFormErrors>({});
+  const [addApiError, setAddApiError] = useState<string | null>(null);
+  const [addSaving, setAddSaving] = useState(false);
 
   const [passwordTarget, setPasswordTarget] = useState<StaffMember | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -121,44 +161,46 @@ export default function StaffPage() {
     newPassword?: string;
     confirmNewPassword?: string;
   }>({});
+  const [passwordApiError, setPasswordApiError] = useState<string | null>(null);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState({
     fullName: "",
     email: "",
-    role: "sales" as StaffMember["role"],
+    role: "STAFF_SALES" as StaffRole,
   });
+  const [editApiError, setEditApiError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
+  const [deleteApiError, setDeleteApiError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // ── Summary figures ──────────────────────────────────────────────────────
 
-  const activeCount = staff.filter((s) => s.status === "Active").length;
-  const inactiveCount = staff.filter((s) => s.status === "Inactive").length;
+  const activeCount = staff.filter((s) => s.status === "ACTIVE").length;
+  const inactiveCount = staff.filter((s) => s.status === "INACTIVE").length;
 
   const mostRecentLogin = useMemo(() => {
-    const parsedActiveLogins = staff
-      .filter((s) => s.status === "Active")
-      .map((s) => ({ raw: s.lastLogin, parsed: parseLastLogin(s.lastLogin) }))
-      .filter((entry): entry is { raw: string; parsed: Date } => entry.parsed !== null);
+    const activeLogins = staff
+      .filter((s) => s.status === "ACTIVE" && s.lastLogin)
+      .map((s) => new Date(s.lastLogin as string));
 
-    if (parsedActiveLogins.length === 0) return "Never";
+    if (activeLogins.length === 0) return "Never";
 
-    return parsedActiveLogins.reduce((latest, entry) =>
-      entry.parsed > latest.parsed ? entry : latest
-    ).raw;
+    const latest = activeLogins.reduce((a, b) => (b > a ? b : a));
+    return formatDateTime(latest);
   }, [staff]);
 
   // ── Search / filter / pagination ─────────────────────────────────────────
+  // Search is already applied server-side (see the fetch effect above) —
+  // this only narrows the fetched list by the client-side role/status filters.
 
   const filteredStaff = staff.filter((member) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      member.fullName.toLowerCase().includes(search) ||
-      member.username.toLowerCase().includes(search);
     const matchesRole = roleFilter === "All" || member.role === roleFilter;
     const matchesStatus = statusFilter === "All" || member.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesRole && matchesStatus;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredStaff.length / ITEMS_PER_PAGE));
@@ -172,12 +214,14 @@ export default function StaffPage() {
   const openAddModal = () => {
     setAddForm(blankAddForm);
     setAddFormErrors({});
+    setAddApiError(null);
     setShowAddModal(true);
   };
 
   const closeAddModal = () => {
     setShowAddModal(false);
     setAddFormErrors({});
+    setAddApiError(null);
   };
 
   const updateAddForm = (field: keyof AddForm, value: string) => {
@@ -185,19 +229,13 @@ export default function StaffPage() {
     setAddFormErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const handleCreateStaff = () => {
+  const handleCreateStaff = async () => {
     const errors: AddFormErrors = {};
 
     if (!addForm.fullName.trim()) errors.fullName = "Full name is required.";
 
     if (!addForm.username.trim()) {
       errors.username = "Username is required.";
-    } else if (
-      staff.some(
-        (s) => s.username.toLowerCase() === addForm.username.trim().toLowerCase()
-      )
-    ) {
-      errors.username = "This username is already taken.";
     }
 
     if (!addForm.password) {
@@ -217,19 +255,28 @@ export default function StaffPage() {
       return;
     }
 
-    const newStaffMember: StaffMember = {
-      id: Date.now(),
-      fullName: addForm.fullName.trim(),
-      username: addForm.username.trim(),
-      role: addForm.role,
-      status: "Active",
-      email: addForm.email.trim(),
-      lastLogin: "Never",
-      dateCreated: new Date().toLocaleDateString("en-GB"),
-    };
+    setAddSaving(true);
+    setAddApiError(null);
 
-    setStaff((prev) => [newStaffMember, ...prev]);
-    closeAddModal();
+    try {
+      const created = await apiFetch<StaffMember>("/staff", {
+        method: "POST",
+        body: JSON.stringify({
+          fullName: addForm.fullName.trim(),
+          username: addForm.username.trim(),
+          password: addForm.password,
+          role: addForm.role,
+          email: addForm.email.trim(),
+        }),
+      });
+
+      setStaff((prev) => [created, ...prev]);
+      closeAddModal();
+    } catch (err) {
+      setAddApiError(err instanceof Error ? err.message : "Failed to create staff member.");
+    } finally {
+      setAddSaving(false);
+    }
   };
 
   const handleAddStaffKeyDown = (e: React.KeyboardEvent) => {
@@ -246,15 +293,19 @@ export default function StaffPage() {
     setNewPassword("");
     setConfirmNewPassword("");
     setPasswordErrors({});
+    setPasswordApiError(null);
     setOpenMenuId(null);
   };
 
   const closePasswordModal = () => {
     setPasswordTarget(null);
     setPasswordErrors({});
+    setPasswordApiError(null);
   };
 
-  const handleUpdatePassword = () => {
+  const handleUpdatePassword = async () => {
+    if (!passwordTarget) return;
+
     const errors: { newPassword?: string; confirmNewPassword?: string } = {};
 
     if (!newPassword) {
@@ -274,10 +325,20 @@ export default function StaffPage() {
       return;
     }
 
-    // BACKEND INTEGRATION SEAM: PATCH /staff/:id/password { password }
-    // The password itself is never kept in local state — this mock simply
-    // confirms the update and closes the modal.
-    closePasswordModal();
+    setPasswordSaving(true);
+    setPasswordApiError(null);
+
+    try {
+      await apiFetch(`/staff/${passwordTarget.id}/change-password`, {
+        method: "PATCH",
+        body: JSON.stringify({ newPassword }),
+      });
+      closePasswordModal();
+    } catch (err) {
+      setPasswordApiError(err instanceof Error ? err.message : "Failed to change password.");
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const handlePasswordKeyDown = (e: React.KeyboardEvent) => {
@@ -291,28 +352,38 @@ export default function StaffPage() {
 
   const openEditModal = (member: StaffMember) => {
     setEditingStaff(member);
-    setEditForm({ fullName: member.fullName, email: member.email, role: member.role });
+    setEditForm({ fullName: member.fullName, email: member.email ?? "", role: member.role });
+    setEditApiError(null);
     setOpenMenuId(null);
   };
 
-  const closeEditModal = () => setEditingStaff(null);
+  const closeEditModal = () => {
+    setEditingStaff(null);
+    setEditApiError(null);
+  };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingStaff) return;
 
-    setStaff((prev) =>
-      prev.map((s) =>
-        s.id === editingStaff.id
-          ? {
-              ...s,
-              fullName: editForm.fullName.trim(),
-              email: editForm.email.trim(),
-              role: editForm.role,
-            }
-          : s
-      )
-    );
-    closeEditModal();
+    setEditSaving(true);
+    setEditApiError(null);
+
+    try {
+      const updated = await apiFetch<StaffMember>(`/staff/${editingStaff.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          fullName: editForm.fullName.trim(),
+          email: editForm.email.trim(),
+          role: editForm.role,
+        }),
+      });
+      setStaff((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      closeEditModal();
+    } catch (err) {
+      setEditApiError(err instanceof Error ? err.message : "Failed to update staff member.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
@@ -324,22 +395,41 @@ export default function StaffPage() {
 
   // ── Activate / deactivate / delete ───────────────────────────────────────
 
-  const toggleActive = (member: StaffMember) => {
+  const toggleActive = async (member: StaffMember) => {
     if (member.username === "admin") return; // protected account — defence in depth
-    setStaff((prev) =>
-      prev.map((s) =>
-        s.id === member.id
-          ? { ...s, status: s.status === "Active" ? "Inactive" : "Active" }
-          : s
-      )
-    );
     setOpenMenuId(null);
+    setTogglingId(member.id);
+    setActionError(null);
+
+    try {
+      const updated = await apiFetch<StaffMember>(`/staff/${member.id}/toggle-status`, {
+        method: "PATCH",
+      });
+      setStaff((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to update staff member's status."
+      );
+    } finally {
+      setTogglingId(null);
+    }
   };
 
-  const confirmDeleteStaff = () => {
+  const confirmDeleteStaff = async () => {
     if (!staffToDelete) return;
-    setStaff((prev) => prev.filter((s) => s.id !== staffToDelete.id));
-    setStaffToDelete(null);
+
+    setDeleting(true);
+    setDeleteApiError(null);
+
+    try {
+      await apiFetch(`/staff/${staffToDelete.id}`, { method: "DELETE" });
+      setStaff((prev) => prev.filter((s) => s.id !== staffToDelete.id));
+      setStaffToDelete(null);
+    } catch (err) {
+      setDeleteApiError(err instanceof Error ? err.message : "Failed to delete staff member.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -355,6 +445,8 @@ export default function StaffPage() {
           Add New Staff
         </Button>
       </div>
+
+      {actionError && <p className="field-error">{actionError}</p>}
 
       {/* ── Summary strip ─────────────────────────────────────────────────── */}
       <div className="staff-summary-strip">
@@ -421,10 +513,10 @@ export default function StaffPage() {
               }}
             >
               <option value="All">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="sales">Sales</option>
-              <option value="warehouse">Warehouse</option>
-              <option value="warranty">Warranty</option>
+              <option value="ADMIN">Admin</option>
+              <option value="STAFF_SALES">Sales</option>
+              <option value="STAFF_WAREHOUSE">Warehouse</option>
+              <option value="STAFF_WARRANTY">Warranty</option>
             </select>
 
             <select
@@ -435,8 +527,8 @@ export default function StaffPage() {
               }}
             >
               <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
             </select>
           </div>
         </div>
@@ -457,7 +549,19 @@ export default function StaffPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedStaff.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="staff-empty-row">
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={9} className="staff-empty-row">
+                    Failed to load staff: {error}
+                  </td>
+                </tr>
+              ) : paginatedStaff.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="staff-empty-row">
                     No staff members found.
@@ -476,10 +580,10 @@ export default function StaffPage() {
                     </td>
                     <td>{member.email || "—"}</td>
                     <td>
-                      <StatusBadge status={member.status} />
+                      <StatusBadge status={STATUS_LABELS[member.status]} />
                     </td>
-                    <td className="staff-muted-cell">{member.lastLogin}</td>
-                    <td className="staff-muted-cell">{member.dateCreated}</td>
+                    <td className="staff-muted-cell">{formatLastLogin(member.lastLogin)}</td>
+                    <td className="staff-muted-cell">{formatDate(new Date(member.createdAt))}</td>
                     <td>
                       <div className="staff-actions">
                         <button
@@ -505,6 +609,7 @@ export default function StaffPage() {
                             <button
                               className="staff-action-btn"
                               title="More actions"
+                              disabled={togglingId === member.id}
                               onClick={() =>
                                 setOpenMenuId(openMenuId === member.id ? null : member.id)
                               }
@@ -515,12 +620,13 @@ export default function StaffPage() {
                             {openMenuId === member.id && (
                               <div className="staff-row-menu">
                                 <button onClick={() => toggleActive(member)}>
-                                  {member.status === "Active" ? "Deactivate" : "Activate"}
+                                  {member.status === "ACTIVE" ? "Deactivate" : "Activate"}
                                 </button>
                                 <button
                                   className="staff-menu-danger"
                                   onClick={() => {
                                     setStaffToDelete(member);
+                                    setDeleteApiError(null);
                                     setOpenMenuId(null);
                                   }}
                                 >
@@ -631,10 +737,10 @@ export default function StaffPage() {
               value={addForm.role}
               onChange={(e) => updateAddForm("role", e.target.value)}
             >
-              <option value="sales">Sales</option>
-              <option value="warehouse">Warehouse</option>
-              <option value="warranty">Warranty</option>
-              <option value="admin">Admin</option>
+              <option value="STAFF_SALES">Sales</option>
+              <option value="STAFF_WAREHOUSE">Warehouse</option>
+              <option value="STAFF_WARRANTY">Warranty</option>
+              <option value="ADMIN">Admin</option>
             </select>
           </div>
         </div>
@@ -649,12 +755,14 @@ export default function StaffPage() {
           </p>
         </div>
 
+        {addApiError && <p className="field-error">{addApiError}</p>}
+
         <div className="modal-actions">
-          <Button variant="secondary" onClick={closeAddModal}>
+          <Button variant="secondary" onClick={closeAddModal} disabled={addSaving}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreateStaff}>
-            Create Staff
+          <Button variant="primary" onClick={handleCreateStaff} disabled={addSaving}>
+            {addSaving ? "Creating..." : "Create Staff"}
           </Button>
         </div>
       </Modal>
@@ -706,12 +814,14 @@ export default function StaffPage() {
               </div>
             </div>
 
+            {passwordApiError && <p className="field-error">{passwordApiError}</p>}
+
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closePasswordModal}>
+              <Button variant="secondary" onClick={closePasswordModal} disabled={passwordSaving}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleUpdatePassword}>
-                Update Password
+              <Button variant="primary" onClick={handleUpdatePassword} disabled={passwordSaving}>
+                {passwordSaving ? "Updating..." : "Update Password"}
               </Button>
             </div>
           </>
@@ -764,24 +874,26 @@ export default function StaffPage() {
                   onChange={(e) =>
                     setEditForm((prev) => ({
                       ...prev,
-                      role: e.target.value as StaffMember["role"],
+                      role: e.target.value as StaffRole,
                     }))
                   }
                 >
-                  <option value="sales">Sales</option>
-                  <option value="warehouse">Warehouse</option>
-                  <option value="warranty">Warranty</option>
-                  <option value="admin">Admin</option>
+                  <option value="STAFF_SALES">Sales</option>
+                  <option value="STAFF_WAREHOUSE">Warehouse</option>
+                  <option value="STAFF_WARRANTY">Warranty</option>
+                  <option value="ADMIN">Admin</option>
                 </select>
               </div>
             </div>
 
+            {editApiError && <p className="field-error">{editApiError}</p>}
+
             <div className="modal-actions">
-              <Button variant="secondary" onClick={closeEditModal}>
+              <Button variant="secondary" onClick={closeEditModal} disabled={editSaving}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleSaveEdit}>
-                Save Changes
+              <Button variant="primary" onClick={handleSaveEdit} disabled={editSaving}>
+                {editSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </>
@@ -791,7 +903,10 @@ export default function StaffPage() {
       {/* ── Delete confirmation modal ─────────────────────────────────────── */}
       <Modal
         isOpen={staffToDelete !== null}
-        onClose={() => setStaffToDelete(null)}
+        onClose={() => {
+          setStaffToDelete(null);
+          setDeleteApiError(null);
+        }}
         title="Delete Staff Member"
         width={420}
       >
@@ -803,12 +918,21 @@ export default function StaffPage() {
             </p>
             <p className="staff-modal-subtitle">This action cannot be undone.</p>
 
+            {deleteApiError && <p className="field-error">{deleteApiError}</p>}
+
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setStaffToDelete(null)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setStaffToDelete(null);
+                  setDeleteApiError(null);
+                }}
+                disabled={deleting}
+              >
                 Cancel
               </Button>
-              <Button variant="danger" onClick={confirmDeleteStaff}>
-                Delete
+              <Button variant="danger" onClick={confirmDeleteStaff} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
           </>
