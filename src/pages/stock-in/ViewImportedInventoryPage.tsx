@@ -18,6 +18,9 @@ import * as XLSX from "xlsx";
 
 import "./ViewImportedInventoryPage.css";
 import { apiFetch } from "../../services/api";
+import { useStickerPrint } from "../../hooks/useStickerPrint";
+import { StickerPrintPreview } from "../../components/ui";
+import type { AssetStickerProps } from "../../components/ui";
 import type { Shipment } from "../shipments/shipmentTypes";
 import type {
   AssetIdSourceType,
@@ -26,6 +29,21 @@ import type {
 } from "./ImportedInventoryTypes";
 
 type StatusFilter = "all" | InventoryItemStatus;
+
+function toStickerProps(item: ImportedInventoryItem): AssetStickerProps {
+  return {
+    assetId: item.assetId,
+    batchId: item.batchId,
+    brand: item.brand,
+    model: item.model,
+    category: item.category,
+    processor: item.processor,
+    generation: item.generation,
+    ram: item.ram,
+    storage: item.storage,
+    screenType: item.screenType,
+  };
+}
 
 interface RawInventoryItem {
   id: number;
@@ -123,6 +141,8 @@ export default function ViewImportedInventoryPage() {
   const [conditionFilter, setConditionFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<ImportedInventoryItem | null>(null);
+
+  const { printStickers, showPrintPreview, printSingle, closePrint } = useStickerPrint();
 
   // ── Shipment + batch lookup (for resolving the numeric batch FK to its
   // human-readable batch code and upload type) ────────────────────────────
@@ -282,9 +302,7 @@ export default function ViewImportedInventoryPage() {
   };
 
   const handlePrintSticker = (item: ImportedInventoryItem) => {
-    // Sticker printing isn't built yet (separate feature) — this is a
-    // placeholder acknowledgement so the action isn't a dead click.
-    alert(`Sticker for ${item.assetId} queued for printing.`);
+    printSingle(toStickerProps(item));
   };
 
   if (shipmentLoading) {
@@ -671,6 +689,10 @@ export default function ViewImportedInventoryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPrintPreview && (
+        <StickerPrintPreview stickers={printStickers} onClose={closePrint} />
       )}
     </div>
   );

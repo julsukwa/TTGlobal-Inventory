@@ -67,6 +67,8 @@
   padding: 0 14px;
 
   color: var(--color-text-faint);
+
+  position: relative;
 }
 
 .search-input {
@@ -81,6 +83,104 @@
 
 .search-input::placeholder {
   color: var(--color-text-faint);
+}
+
+.search-spinner {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  animation: search-spin 0.8s linear infinite;
+}
+
+@keyframes search-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =========================
+   SEARCH RESULTS DROPDOWN
+========================= */
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: 400px;
+  overflow-y: auto;
+
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+
+  z-index: 1000;
+}
+
+.search-results-status {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+.search-results-error {
+  color: var(--color-danger-text);
+}
+
+.search-result-row {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  padding: var(--space-3) var(--space-4);
+
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border-light);
+
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.search-result-row:last-child {
+  border-bottom: none;
+}
+
+.search-result-row:hover {
+  background: var(--color-surface);
+}
+
+.search-result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-result-asset-id {
+  font-family: "Courier New", Courier, monospace;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.search-result-name {
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--color-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-category {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 
 /* =========================

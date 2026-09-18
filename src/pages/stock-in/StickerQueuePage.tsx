@@ -6,10 +6,28 @@ import "./StickerQueuePage.css";
 import { apiFetch } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { canEdit } from "../../utils/permissions";
+import { useStickerPrint } from "../../hooks/useStickerPrint";
+import { StickerPrintPreview } from "../../components/ui";
+import type { AssetStickerProps } from "../../components/ui";
 import type { Shipment } from "../shipments/shipmentTypes";
 import type { StickerQueueItem, StickerStatus } from "./stickerQueueTypes";
 
 type StatusFilter = "all" | StickerStatus;
+
+function toStickerProps(entry: StickerQueueItem): AssetStickerProps {
+  return {
+    assetId: entry.assetId,
+    batchId: entry.batchId,
+    brand: entry.brand,
+    model: entry.model,
+    category: entry.category,
+    processor: entry.processor,
+    generation: entry.generation,
+    ram: entry.ram,
+    storage: entry.storage,
+    screenType: entry.screenType,
+  };
+}
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "—";
@@ -38,6 +56,9 @@ export default function StickerQueuePage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const { printStickers, showPrintPreview, printSingle, printBatch, closePrint } = useStickerPrint();
 
   useEffect(() => {
     if (!shipmentId) return;
@@ -87,37 +108,64 @@ export default function StickerQueuePage() {
     });
   };
 
-  const handleMarkSelectedPrinted = async () => {
-    if (selectedIds.size === 0) return;
+  // Every print action opens the preview first, then marks whatever was still
+  // PENDING as printed in the background. Already-PRINTED items just preview,
+  // and read-only roles (who can't call the mark endpoints) only preview.
+  // Marking is done here rather than on the actual print dialog result since
+  // the browser doesn't report whether a print was completed or cancelled.
+  const runMarkPrinted = async (request: () => Promise<unknown>) => {
     setActionPending(true);
+    setActionError(null);
     try {
-      await apiFetch(`/sticker-queue/mark-printed`, {
-        method: "PATCH",
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
-      });
+      await request();
       setSelectedIds(new Set());
       fetchEntries();
     } catch (err) {
-      setError((err as Error).message);
+      setActionError(
+        `Sticker preview opened, but marking as printed failed: ${(err as Error).message}`
+      );
     } finally {
       setActionPending(false);
     }
   };
 
-  const handleMarkAllPrinted = async () => {
-    if (!shipmentId || pendingCount === 0) return;
-    setActionPending(true);
-    try {
-      await apiFetch(`/sticker-queue/shipment/${shipmentId}/mark-all-printed`, {
+  const handlePrintRow = (entry: StickerQueueItem) => {
+    printSingle(toStickerProps(entry));
+
+    if (entry.status !== "PENDING" || isReadOnly) return;
+    void runMarkPrinted(() =>
+      apiFetch(`/sticker-queue/mark-printed`, {
         method: "PATCH",
-      });
-      setSelectedIds(new Set());
-      fetchEntries();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setActionPending(false);
-    }
+        body: JSON.stringify({ ids: [entry.id] }),
+      })
+    );
+  };
+
+  const handlePrintSelected = () => {
+    const selected = entries.filter((e) => selectedIds.has(e.id));
+    if (selected.length === 0) return;
+    printBatch(selected.map(toStickerProps));
+
+    const pendingIds = selected.filter((e) => e.status === "PENDING").map((e) => e.id);
+    if (pendingIds.length === 0 || isReadOnly) return;
+    void runMarkPrinted(() =>
+      apiFetch(`/sticker-queue/mark-printed`, {
+        method: "PATCH",
+        body: JSON.stringify({ ids: pendingIds }),
+      })
+    );
+  };
+
+  const handlePrintAllPending = () => {
+    if (!shipmentId) return;
+    const pending = entries.filter((e) => e.status === "PENDING");
+    if (pending.length === 0) return;
+    printBatch(pending.map(toStickerProps));
+
+    if (isReadOnly) return;
+    void runMarkPrinted(() =>
+      apiFetch(`/sticker-queue/shipment/${shipmentId}/mark-all-printed`, { method: "PATCH" })
+    );
   };
 
   if (shipmentLoading) {
@@ -200,22 +248,24 @@ export default function StickerQueuePage() {
               <button
                 className="sq-action-secondary"
                 disabled={selectedIds.size === 0 || actionPending}
-                onClick={handleMarkSelectedPrinted}
+                onClick={handlePrintSelected}
               >
                 <Printer size={14} />
-                Mark Selected as Printed ({selectedIds.size})
+                Print Selected ({selectedIds.size})
               </button>
               <button
                 className="sq-action-primary"
                 disabled={pendingCount === 0 || actionPending}
-                onClick={handleMarkAllPrinted}
+                onClick={handlePrintAllPending}
               >
-                <CheckCircle2 size={14} />
-                Mark All Pending as Printed
+                <Printer size={14} />
+                Print All Pending
               </button>
             </div>
           )}
         </div>
+
+        {actionError && <p className="field-error sq-action-error">{actionError}</p>}
 
         <div className="sq-table-wrap">
           <table className="sq-table">
@@ -240,24 +290,25 @@ export default function StickerQueuePage() {
                 <th>Status</th>
                 <th>Created At</th>
                 <th>Printed At</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={isReadOnly ? 9 : 10} className="sq-empty-row">
+                  <td colSpan={isReadOnly ? 10 : 11} className="sq-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={isReadOnly ? 9 : 10} className="sq-empty-row">
+                  <td colSpan={isReadOnly ? 10 : 11} className="sq-empty-row">
                     Failed to load sticker queue: {error}
                   </td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={isReadOnly ? 9 : 10} className="sq-empty-row">
+                  <td colSpan={isReadOnly ? 10 : 11} className="sq-empty-row">
                     {entries.length === 0
                       ? "No sticker queue entries for this shipment yet."
                       : "No entries match the current filter."}
@@ -296,6 +347,15 @@ export default function StickerQueuePage() {
                     </td>
                     <td className="sq-date-cell">{formatDateTime(entry.createdAt)}</td>
                     <td className="sq-date-cell">{formatDateTime(entry.printedAt)}</td>
+                    <td>
+                      <button
+                        className="sq-print-btn"
+                        title="Print sticker"
+                        onClick={() => handlePrintRow(entry)}
+                      >
+                        <Printer size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -309,6 +369,10 @@ export default function StickerQueuePage() {
           </span>
         </div>
       </div>
+
+      {showPrintPreview && (
+        <StickerPrintPreview stickers={printStickers} onClose={closePrint} />
+      )}
     </div>
   );
 }

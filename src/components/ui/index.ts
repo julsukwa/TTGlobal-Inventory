@@ -12,3 +12,9 @@ export type { SearchBarProps } from "./SearchBar";
 
 export { Pagination } from "./Pagination";
 export type { PaginationProps } from "./Pagination";
+
+export { AssetSticker } from "../AssetSticker";
+export type { AssetStickerProps } from "../AssetSticker";
+
+export { StickerPrintPreview } from "../StickerPrintPreview";
+export type { StickerPrintPreviewProps } from "../StickerPrintPreview";

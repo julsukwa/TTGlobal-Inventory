@@ -14,6 +14,7 @@
 // Backed by the real /inventory API — see backend/src/inventory.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Download,
   Eye,
@@ -32,8 +33,32 @@ import "./DatabasePage.css";
 import { toInventoryAsset } from "./databaseTypes";
 import type { InventoryAsset, BackendInventoryItem, InventoryStats } from "./databaseTypes";
 import { apiFetch } from "../../services/api";
+import { useStickerPrint } from "../../hooks/useStickerPrint";
 
-import { StatusBadge, SearchBar, Pagination, Button, Modal } from "../../components/ui";
+import {
+  StatusBadge,
+  SearchBar,
+  Pagination,
+  Button,
+  Modal,
+  StickerPrintPreview,
+} from "../../components/ui";
+import type { AssetStickerProps } from "../../components/ui";
+
+function toStickerProps(item: InventoryAsset): AssetStickerProps {
+  return {
+    assetId: item.assetId,
+    batchId: item.batchId,
+    brand: item.brand,
+    model: item.model,
+    category: item.category,
+    processor: item.processor,
+    generation: item.generation,
+    ram: item.ram,
+    storage: item.storage,
+    screenType: item.screenType,
+  };
+}
 
 const ITEMS_PER_PAGE = 10;
 
@@ -73,7 +98,22 @@ export default function DatabasePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  // The Topbar's global search hands off here via /database?search=X — read
+  // it as the initial term so the first fetch is already filtered, and again
+  // on any later navigation (location.key changes even for a repeat of the
+  // same URL) since this page stays mounted when the operator is already on it.
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") ?? "");
+
+  useEffect(() => {
+    const urlSearch = searchParams.get("search");
+    if (urlSearch !== null) {
+      setSearchTerm(urlSearch);
+      setCurrentPage(1);
+    }
+  }, [location.key, searchParams]);
+
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [brandFilter, setBrandFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -93,6 +133,8 @@ export default function DatabasePage() {
   const [restoreTarget, setRestoreTarget] = useState<InventoryAsset | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const { printStickers, showPrintPreview, printSingle, closePrint } = useStickerPrint();
 
   // Close the open three-dot menu on any click outside it — same pattern
   // used on StaffPage.
@@ -275,8 +317,9 @@ export default function DatabasePage() {
     }
   };
 
-  // Placeholder — sticker printing isn't built yet (separate feature).
-  const handlePrintSticker = () => {};
+  const handlePrintSticker = (item: InventoryAsset) => {
+    printSingle(toStickerProps(item));
+  };
 
   // ── Restore to Ok ─────────────────────────────────────────────────────────
 
@@ -629,7 +672,7 @@ export default function DatabasePage() {
                               </button>
                               <button
                                 onClick={() => {
-                                  handlePrintSticker();
+                                  handlePrintSticker(item);
                                   setOpenMenuId(null);
                                 }}
                               >
@@ -903,7 +946,7 @@ export default function DatabasePage() {
             <div className="db-drawer-footer">
               {!isEditing ? (
                 <>
-                  <Button variant="secondary" onClick={handlePrintSticker}>
+                  <Button variant="secondary" onClick={() => handlePrintSticker(selectedAsset)}>
                     <Printer size={14} />
                     Print Sticker
                   </Button>
@@ -952,6 +995,10 @@ export default function DatabasePage() {
           </>
         )}
       </Modal>
+
+      {showPrintPreview && (
+        <StickerPrintPreview stickers={printStickers} onClose={closePrint} />
+      )}
     </div>
   );
 }

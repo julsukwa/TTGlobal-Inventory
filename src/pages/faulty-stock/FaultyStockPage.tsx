@@ -19,10 +19,27 @@ import { toFaultyStockItem } from "./faultyStockTypes";
 import type { FaultyStockItem } from "./faultyStockTypes";
 import type { BackendInventoryItem } from "../database/databaseTypes";
 import { apiFetch } from "../../services/api";
+import { useStickerPrint } from "../../hooks/useStickerPrint";
 
-import { SearchBar, Pagination, Button, Modal } from "../../components/ui";
+import { SearchBar, Pagination, Button, Modal, StickerPrintPreview } from "../../components/ui";
+import type { AssetStickerProps } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { canEdit } from "../../utils/permissions";
+
+function toStickerProps(item: FaultyStockItem): AssetStickerProps {
+  return {
+    assetId: item.assetId,
+    batchId: item.batchId,
+    brand: item.brand,
+    model: item.model,
+    category: item.category,
+    processor: item.processor,
+    generation: item.generation,
+    ram: item.ram,
+    storage: item.storage,
+    screenType: item.screenType,
+  };
+}
 
 interface DropdownValueApi {
   id: number;
@@ -84,6 +101,8 @@ export default function FaultyStockPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [selectedItem, setSelectedItem] = useState<FaultyStockItem | null>(null);
+
+  const { printStickers, showPrintPreview, printSingle, closePrint } = useStickerPrint();
 
   const [editTarget, setEditTarget] = useState<FaultyStockItem | null>(null);
   const [editFaultTypes, setEditFaultTypes] = useState<string[]>([]);
@@ -187,8 +206,9 @@ export default function FaultyStockPage() {
   const handleViewDetails = (item: FaultyStockItem) => setSelectedItem(item);
   const handleCloseDrawer = () => setSelectedItem(null);
 
-  // Placeholder — sticker printing isn't built yet (separate feature).
-  const handlePrintSticker = () => {};
+  const handlePrintSticker = (item: FaultyStockItem) => {
+    printSingle(toStickerProps(item));
+  };
 
   // ── Edit Fault modal ─────────────────────────────────────────────────────
 
@@ -543,7 +563,7 @@ export default function FaultyStockPage() {
                           <button
                             className="fs-action-btn"
                             title="Print asset sticker"
-                            onClick={handlePrintSticker}
+                            onClick={() => handlePrintSticker(item)}
                           >
                             <Printer size={14} />
                           </button>
@@ -788,6 +808,10 @@ export default function FaultyStockPage() {
           </>
         )}
       </Modal>
+
+      {showPrintPreview && (
+        <StickerPrintPreview stickers={printStickers} onClose={closePrint} />
+      )}
     </div>
   );
 }

@@ -8,6 +8,11 @@ export interface StickerQueueItem {
   category: string;
   brand: string;
   model: string;
+  processor: string;
+  generation?: string;
+  ram: string;
+  storage: string;
+  screenType: string;
   status: StickerStatus;
   createdAt: string;
   printedAt: string | null;

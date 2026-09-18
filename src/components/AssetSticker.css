@@ -1,0 +1,99 @@
+.asset-sticker {
+  box-sizing: border-box;
+  width: 50mm;
+  height: 25mm;
+  padding: 1mm;
+  background: var(--color-white);
+  border: 0.5px solid #ccc;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+
+.asset-sticker-info {
+  width: 29mm;
+  max-width: 29mm;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.asset-sticker-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3mm;
+  overflow: hidden;
+}
+
+.asset-sticker-title {
+  font-size: 7pt;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #111111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-sticker-category {
+  font-size: 5.5pt;
+  line-height: 1.15;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-sticker-processor,
+.asset-sticker-specs,
+.asset-sticker-screen {
+  font-size: 5.5pt;
+  line-height: 1.15;
+  color: var(--color-text-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-sticker-ids {
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-sticker-asset-id {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 6.5pt;
+  font-weight: 600;
+  color: #000000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-sticker-batch {
+  font-size: 4.5pt;
+  line-height: 1.2;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-sticker-qr {
+  width: 18mm;
+  height: 18mm;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asset-sticker-qr svg {
+  width: 100%;
+  height: 100%;
+}
