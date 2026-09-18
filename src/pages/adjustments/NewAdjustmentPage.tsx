@@ -3,23 +3,21 @@
 // Builds a batch of "Ok → Faulty" adjustments — either one at a time via the
 // manual Asset ID search + fault checklist, or in bulk via a two-column CSV
 // (Asset ID, Fault Types) — into a single session list, then commits the
-// whole batch at once on "Apply Adjustments".
+// whole batch at once on "Apply Adjustments" via POST /adjustments.
 //
 // The two entry methods share one session list: a manual "Add to List" click
-// appends one item; a valid CSV row is appended automatically as soon as the
-// file is parsed (there's no separate "confirm" step for CSV rows — the
-// preview table below the dropzone simply reflects what got merged in and
-// what was skipped).
+// appends one item; a CSV row that resolves to a real, eligible (status OK)
+// asset is appended automatically as soon as the file is parsed. Either way,
+// the fault types offered are whatever's currently active in the Dropdowns
+// module (category "Fault") — see GET /dropdowns/active/Fault below.
 //
-// Fault type checkboxes are sourced from the live Dropdowns module (category
-// "Fault") — currently just 3 values (Screen Fault, Battery Fault, Keyboard
-// Fault). Historical AdjustmentRecord data uses a richer, free-text fault
-// vocabulary (see mockAdjustments.ts) since faultTypes is a plain string[],
-// not constrained to the dropdown list — only this live checklist is.
-//
-// BACKEND INTEGRATION SEAM: see adjustmentTypes.ts for the planned endpoints.
+// Per-row asset lookups (manual search, CSV parsing) hit GET /inventory/:id
+// directly for immediate feedback; the final POST /adjustments on Apply is
+// still what actually validates and commits the whole batch atomically, so a
+// row that looked eligible during preview can still fail there if its status
+// changed in the meantime.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -32,21 +30,25 @@ import {
 } from "lucide-react";
 
 import "./NewAdjustmentPage.css";
-import { mockOkInventoryPool } from "./mockAdjustments";
-import { dropdownValues } from "../dropdowns/mockDropdown";
-import type { AdjustmentRecord, AdjustmentSessionItem } from "./adjustmentTypes";
-import { useAuth } from "../../context/AuthContext";
+import type { AdjustmentSessionItem } from "./adjustmentTypes";
+import type { BackendInventoryItem as InventoryDetailItem } from "../database/databaseTypes";
+import { apiFetch, ApiError } from "../../services/api";
 import { Button } from "../../components/ui";
 
-type OkInventoryItem = (typeof mockOkInventoryPool)[number];
-
-const FAULT_OPTIONS = dropdownValues.fault.map((f) => f.name);
+interface DropdownValueApi {
+  id: number;
+  category: string;
+  value: string;
+  isActive: boolean;
+  createdAt: string;
+}
 
 interface CsvPreviewRow {
   assetId: string;
   faultTypes: string[];
   status: "Valid" | "Invalid";
   reason?: string;
+  item?: InventoryDetailItem;
 }
 
 /** Splits one CSV line into cells, honouring double-quoted cells that
@@ -77,7 +79,7 @@ function splitCsvLine(line: string): string[] {
   return result.map((cell) => cell.trim());
 }
 
-function buildSpecs(item: OkInventoryItem): string {
+function buildSpecs(item: InventoryDetailItem): string {
   return (
     [item.processor, item.generation, item.ram, item.storage, item.speed]
       .filter(Boolean)
@@ -85,14 +87,17 @@ function buildSpecs(item: OkInventoryItem): string {
   );
 }
 
-function formatTimestamp(date: Date): string {
-  const datePart = date.toLocaleDateString("en-GB");
-  const timePart = date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${datePart} ${timePart}`;
+function toSessionItem(item: InventoryDetailItem, faultTypes: string[]): AdjustmentSessionItem {
+  return {
+    assetId: item.assetId,
+    itemName: `${item.brand} ${item.model}`.trim(),
+    category: item.category,
+    brand: item.brand,
+    model: item.model,
+    specs: buildSpecs(item),
+    currentStatus: "Ok",
+    faultTypes,
+  };
 }
 
 function downloadAdjustmentCsvTemplate() {
@@ -113,7 +118,19 @@ function downloadAdjustmentCsvTemplate() {
 
 export default function NewAdjustmentPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+
+  // ── Fault type options — live from the Dropdowns module ──────────────────
+  const [faultOptions, setFaultOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<DropdownValueApi[]>("/dropdowns/active/Fault")
+      .then((data) => setFaultOptions(data.map((d) => d.value)))
+      .catch(() => {
+        // Checklist just stays empty on failure — POST /adjustments would
+        // reject an unrecognized fault type anyway, so there's no unsafe
+        // fallback worth inventing here.
+      });
+  }, []);
 
   // ── Session list (shared by manual entry + CSV upload) ───────────────────
   const [sessionItems, setSessionItems] = useState<AdjustmentSessionItem[]>([]);
@@ -122,7 +139,8 @@ export default function NewAdjustmentPage() {
   // ── Manual entry ──────────────────────────────────────────────────────────
   const [assetIdSearch, setAssetIdSearch] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [foundItem, setFoundItem] = useState<OkInventoryItem | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [foundItem, setFoundItem] = useState<InventoryDetailItem | null>(null);
   const [selectedFaults, setSelectedFaults] = useState<string[]>([]);
   const [notesDraft, setNotesDraft] = useState("");
 
@@ -131,13 +149,18 @@ export default function NewAdjustmentPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState<CsvPreviewRow[]>([]);
+  const [parsingFile, setParsingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Apply ─────────────────────────────────────────────────────────────────
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const sessionAssetIdSet = new Set(sessionItems.map((i) => i.assetId.toLowerCase()));
 
   // ── Manual entry handlers ─────────────────────────────────────────────────
 
-  const handleSearchAsset = () => {
+  const handleSearchAsset = async () => {
     const query = assetIdSearch.trim();
     setSearchError(null);
     setFoundItem(null);
@@ -149,23 +172,31 @@ export default function NewAdjustmentPage() {
       return;
     }
 
-    const match = mockOkInventoryPool.find(
-      (item) => item.assetId.toLowerCase() === query.toLowerCase()
-    );
+    setSearching(true);
+    try {
+      const item = await apiFetch<InventoryDetailItem>(`/inventory/${encodeURIComponent(query)}`);
 
-    if (!match) {
-      setSearchError("Asset ID not found in the system.");
-      return;
+      if (item.status === "FAULTY") {
+        setSearchError("This item is already marked as Faulty.");
+        return;
+      }
+      if (item.status === "ISSUED") {
+        setSearchError("This item has already been issued.");
+        return;
+      }
+
+      setFoundItem(item);
+      setSelectedFaults([]);
+      setNotesDraft("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setSearchError("Asset ID not found in the system.");
+      } else {
+        setSearchError(err instanceof Error ? err.message : "Failed to look up asset.");
+      }
+    } finally {
+      setSearching(false);
     }
-
-    if (match.status !== "OK") {
-      setSearchError("This item is already marked as Faulty.");
-      return;
-    }
-
-    setFoundItem(match);
-    setSelectedFaults([]);
-    setNotesDraft("");
   };
 
   const toggleFault = (faultName: string) => {
@@ -177,17 +208,7 @@ export default function NewAdjustmentPage() {
   const handleAddToList = () => {
     if (!foundItem || selectedFaults.length === 0) return;
 
-    const newItem: AdjustmentSessionItem = {
-      assetId: foundItem.assetId,
-      itemName: `${foundItem.brand} ${foundItem.model}`.trim(),
-      category: foundItem.category,
-      brand: foundItem.brand,
-      model: foundItem.model,
-      specs: buildSpecs(foundItem),
-      currentStatus: "Ok",
-      faultTypes: selectedFaults,
-    };
-
+    const newItem = toSessionItem(foundItem, selectedFaults);
     setSessionItems((prev) => [...prev, newItem]);
 
     const trimmedNotes = notesDraft.trim();
@@ -218,9 +239,9 @@ export default function NewAdjustmentPage() {
 
   // ── CSV upload handlers ───────────────────────────────────────────────────
 
-  const parseAdjustmentCsv = (text: string): CsvPreviewRow[] => {
+  const parseAdjustmentCsv = async (text: string): Promise<CsvPreviewRow[]> => {
     const lines = text
-      .replace(/^\uFEFF/, "")
+      .replace(/^﻿/, "")
       .split(/\r\n|\r|\n/)
       .filter((line) => line.trim().length > 0);
 
@@ -256,25 +277,32 @@ export default function NewAdjustmentPage() {
         continue;
       }
 
-      const match = mockOkInventoryPool.find((item) => item.assetId.toLowerCase() === key);
-
-      if (!match) {
-        rows.push({ assetId, faultTypes, status: "Invalid", reason: "Asset ID not found." });
-        continue;
-      }
-
-      if (match.status !== "OK") {
-        rows.push({ assetId, faultTypes, status: "Invalid", reason: "Already marked as Faulty." });
-        continue;
-      }
-
       if (faultTypes.length === 0) {
         rows.push({ assetId, faultTypes, status: "Invalid", reason: "No fault types specified." });
         continue;
       }
 
-      seenInFile.add(key);
-      rows.push({ assetId, faultTypes, status: "Valid" });
+      try {
+        const item = await apiFetch<InventoryDetailItem>(`/inventory/${encodeURIComponent(assetId)}`);
+
+        if (item.status === "FAULTY") {
+          rows.push({ assetId, faultTypes, status: "Invalid", reason: "Already marked as Faulty." });
+          continue;
+        }
+        if (item.status === "ISSUED") {
+          rows.push({ assetId, faultTypes, status: "Invalid", reason: "Already issued." });
+          continue;
+        }
+
+        seenInFile.add(key);
+        rows.push({ assetId: item.assetId, faultTypes, status: "Valid", item });
+      } catch (err) {
+        const reason =
+          err instanceof ApiError && err.status === 404
+            ? "Asset ID not found."
+            : "Failed to look up asset.";
+        rows.push({ assetId, faultTypes, status: "Invalid", reason });
+      }
     }
 
     return rows;
@@ -295,36 +323,30 @@ export default function NewAdjustmentPage() {
     }
 
     const text = await file.text();
-    const rows = parseAdjustmentCsv(text);
 
-    if (rows.length === 0) {
-      setFileError("The file contains a header row but no data rows.");
-      return;
-    }
+    setParsingFile(true);
+    try {
+      const rows = await parseAdjustmentCsv(text);
 
-    setSelectedFile(file);
-    setCsvPreviewRows(rows);
+      if (rows.length === 0) {
+        setFileError("The file contains a header row but no data rows.");
+        return;
+      }
 
-    const validItems: AdjustmentSessionItem[] = rows
-      .filter((row) => row.status === "Valid")
-      .map((row) => {
-        const match = mockOkInventoryPool.find(
-          (item) => item.assetId.toLowerCase() === row.assetId.toLowerCase()
-        )!;
-        return {
-          assetId: match.assetId,
-          itemName: `${match.brand} ${match.model}`.trim(),
-          category: match.category,
-          brand: match.brand,
-          model: match.model,
-          specs: buildSpecs(match),
-          currentStatus: "Ok" as const,
-          faultTypes: row.faultTypes,
-        };
-      });
+      setSelectedFile(file);
+      setCsvPreviewRows(rows);
 
-    if (validItems.length > 0) {
-      setSessionItems((prev) => [...prev, ...validItems]);
+      const validItems: AdjustmentSessionItem[] = rows
+        .filter((row): row is CsvPreviewRow & { item: InventoryDetailItem } =>
+          row.status === "Valid" && row.item !== undefined
+        )
+        .map((row) => toSessionItem(row.item, row.faultTypes));
+
+      if (validItems.length > 0) {
+        setSessionItems((prev) => [...prev, ...validItems]);
+      }
+    } finally {
+      setParsingFile(false);
     }
   };
 
@@ -361,38 +383,30 @@ export default function NewAdjustmentPage() {
 
   // ── Footer actions ────────────────────────────────────────────────────────
 
-  const handleApplyAdjustments = () => {
+  const handleApplyAdjustments = async () => {
     if (sessionItems.length === 0) return;
 
-    const timestamp = formatTimestamp(new Date());
-    const adjustedBy = user?.username ?? "admin";
+    setApplying(true);
+    setApplyError(null);
 
-    const newRecords: AdjustmentRecord[] = sessionItems.map((item, index) => ({
-      id: Date.now() + index,
-      assetId: item.assetId,
-      itemName: item.itemName,
-      faultTypes: item.faultTypes,
-      fromStatus: "Ok",
-      toStatus: "Faulty",
-      date: timestamp,
-      adjustedBy,
-      notes: sessionNotesByAssetId[item.assetId] ?? "",
-    }));
+    try {
+      await apiFetch("/adjustments", {
+        method: "POST",
+        body: JSON.stringify({
+          items: sessionItems.map((item) => ({
+            assetId: item.assetId,
+            faultTypes: item.faultTypes,
+            notes: sessionNotesByAssetId[item.assetId] ?? "",
+          })),
+        }),
+      });
 
-    const newCatalogEntries: Record<
-      string,
-      { category: string; brand: string; model: string; specs: string }
-    > = {};
-    sessionItems.forEach((item) => {
-      newCatalogEntries[item.itemName] = {
-        category: item.category,
-        brand: item.brand,
-        model: item.model,
-        specs: item.specs,
-      };
-    });
-
-    navigate("/adjustments", { state: { newRecords, newCatalogEntries } });
+      navigate("/adjustments");
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Failed to apply adjustments.");
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -430,9 +444,9 @@ export default function NewAdjustmentPage() {
                   if (e.key === "Enter") handleSearchAsset();
                 }}
               />
-              <button className="na-search-btn" onClick={handleSearchAsset}>
+              <button className="na-search-btn" onClick={handleSearchAsset} disabled={searching}>
                 <Search size={14} />
-                Search
+                {searching ? "Searching..." : "Search"}
               </button>
             </div>
             {searchError && <span className="field-error">{searchError}</span>}
@@ -468,7 +482,7 @@ export default function NewAdjustmentPage() {
                   Fault Types <span className="na-required">*</span>
                 </label>
                 <div className="na-fault-checklist">
-                  {FAULT_OPTIONS.map((fault) => (
+                  {faultOptions.map((fault) => (
                     <label key={fault} className="na-fault-checkbox">
                       <input
                         type="checkbox"
@@ -576,7 +590,7 @@ export default function NewAdjustmentPage() {
               </div>
               <h3>Drag and drop your CSV here</h3>
               <p className="na-or">or</p>
-              <button className="na-choose-btn" onClick={handleChooseFile}>
+              <button className="na-choose-btn" onClick={handleChooseFile} disabled={parsingFile}>
                 <FileSpreadsheet size={14} />
                 Choose File
               </button>
@@ -587,7 +601,11 @@ export default function NewAdjustmentPage() {
                 className="na-hidden-input"
                 onChange={handleFileInputChange}
               />
-              <p className="na-hint">CSV files only — Asset ID, Fault Types columns.</p>
+              <p className="na-hint">
+                {parsingFile
+                  ? "Validating rows against inventory..."
+                  : "CSV files only — Asset ID, Fault Types columns."}
+              </p>
             </div>
           ) : (
             <div className="na-file-selected">
@@ -649,16 +667,19 @@ export default function NewAdjustmentPage() {
       </div>
 
       {/* ── Footer actions ───────────────────────────────────────────────── */}
+      {applyError && <p className="field-error na-apply-error">{applyError}</p>}
       <div className="na-footer">
-        <Button variant="secondary" onClick={() => navigate("/adjustments")}>
+        <Button variant="secondary" onClick={() => navigate("/adjustments")} disabled={applying}>
           Cancel
         </Button>
         <Button
           variant="primary"
           onClick={handleApplyAdjustments}
-          disabled={sessionItems.length === 0}
+          disabled={sessionItems.length === 0 || applying}
         >
-          Apply Adjustments{sessionItems.length > 0 ? ` (${sessionItems.length} items)` : ""}
+          {applying
+            ? "Applying..."
+            : `Apply Adjustments${sessionItems.length > 0 ? ` (${sessionItems.length} items)` : ""}`}
         </Button>
       </div>
     </div>

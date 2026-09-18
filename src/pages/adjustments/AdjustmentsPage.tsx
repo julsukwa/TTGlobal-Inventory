@@ -2,58 +2,46 @@
 //
 // Read-only history of every "Ok → Faulty" adjustment made in the system,
 // with search/filter/pagination and a per-record detail drawer. New
-// adjustments are created on NewAdjustmentPage (/adjustments/new) and handed
-// back here via router state on "Apply Adjustments" — see the note above the
-// initial state below for the current limitation of that approach.
+// adjustments are created on NewAdjustmentPage (/adjustments/new) via
+// POST /adjustments; this page just refetches from GET /adjustments on
+// mount and after returning here, so no router-state hand-off is needed.
 //
 // Access: Admin and Warehouse Staff only (see src/utils/permissions.ts,
 // module key "adjustments").
 
-import { useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Download, Eye, X, ClipboardList, CalendarClock, AlertOctagon } from "lucide-react";
 
 import "./AdjustmentsPage.css";
-import { mockAdjustments, mockItemCatalog, type ItemCatalogEntry } from "./mockAdjustments";
-import type { AdjustmentRecord } from "./adjustmentTypes";
+import { toAdjustmentRecord } from "./adjustmentTypes";
+import type { AdjustmentRecord, BackendAdjustmentRecord } from "./adjustmentTypes";
+import { apiFetch, apiFetchBlob } from "../../services/api";
 
 import { StatusBadge, SearchBar, Pagination, Button } from "../../components/ui";
 
 const ITEMS_PER_PAGE = 6;
 
-interface IncomingState {
-  newRecords?: AdjustmentRecord[];
-  newCatalogEntries?: Record<string, ItemCatalogEntry>;
-}
-
-/** Extracts the "YYYY-MM-DD" portion of the mock "DD/MM/YYYY hh:mm AM/PM"
- * date format so date-range filtering can use plain string comparison
- * (ISO-formatted date strings sort correctly without any Date parsing). */
-function toIsoDateOnly(value: string): string | null {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!match) return null;
-  const [, dd, mm, yyyy] = match;
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 export default function AdjustmentsPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const incoming = location.state as IncomingState | null;
 
-  // NOTE: this only merges records handed back from a same-navigation round
-  // trip through NewAdjustmentPage. Since there's no shared/global store for
-  // adjustments (out of scope here), navigating away and back later without
-  // that router state resets the list to the seed mock data — the same
-  // known limitation the existing Stock Out flow has.
-  const [adjustments] = useState<AdjustmentRecord[]>(() => [
-    ...(incoming?.newRecords ?? []),
-    ...mockAdjustments,
-  ]);
-  const [itemCatalog] = useState<Record<string, ItemCatalogEntry>>(() => ({
-    ...mockItemCatalog,
-    ...(incoming?.newCatalogEntries ?? {}),
-  }));
+  // Unfiltered snapshot — used only to derive the summary strip and the
+  // fault-type filter's option list, independent of whatever's currently
+  // filtered in the table below (the same pattern DatabasePage uses).
+  const [allRecords, setAllRecords] = useState<AdjustmentRecord[]>([]);
+
+  useEffect(() => {
+    apiFetch<BackendAdjustmentRecord[]>("/adjustments")
+      .then((rows) => setAllRecords(rows.map(toAdjustmentRecord)))
+      .catch(() => {
+        // Summary/filter options just stay empty on failure — the main
+        // (filtered) fetch below still reports its own error if it fails.
+      });
+  }, []);
+
+  const [adjustments, setAdjustments] = useState<AdjustmentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [faultTypeFilter, setFaultTypeFilter] = useState("All");
@@ -62,10 +50,49 @@ export default function AdjustmentsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRecord, setSelectedRecord] = useState<AdjustmentRecord | null>(null);
 
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // ── Filtered fetch — search/faultType/dateFrom/dateTo are all applied
+  // server-side. Debounced so typing in the search box doesn't fire a
+  // request per keystroke. ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const timeoutId = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      if (faultTypeFilter !== "All") params.set("faultType", faultTypeFilter);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      // Include the whole "to" day rather than just its midnight instant.
+      if (dateTo) params.set("dateTo", `${dateTo}T23:59:59.999`);
+      const query = params.toString();
+
+      apiFetch<BackendAdjustmentRecord[]>(`/adjustments${query ? `?${query}` : ""}`)
+        .then((rows) => {
+          if (!cancelled) setAdjustments(rows.map(toAdjustmentRecord));
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchTerm, faultTypeFilter, dateFrom, dateTo]);
+
   // ── Summary figures ──────────────────────────────────────────────────────
 
   const now = new Date();
-  const thisMonthCount = adjustments.filter((r) => {
+  const thisMonthCount = allRecords.filter((r) => {
     const match = r.date.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
     if (!match) return false;
     const [, , mm, yyyy] = match;
@@ -74,7 +101,7 @@ export default function AdjustmentsPage() {
 
   const mostCommonFault = useMemo(() => {
     const counts = new Map<string, number>();
-    adjustments.forEach((r) =>
+    allRecords.forEach((r) =>
       r.faultTypes.forEach((f) => counts.set(f, (counts.get(f) ?? 0) + 1))
     );
     if (counts.size === 0) return "—";
@@ -84,38 +111,17 @@ export default function AdjustmentsPage() {
       .map(([f]) => f)
       .sort();
     return topFaults[0];
-  }, [adjustments]);
+  }, [allRecords]);
 
   const faultTypeOptions = useMemo(() => {
     const unique = new Set<string>();
-    adjustments.forEach((r) => r.faultTypes.forEach((f) => unique.add(f)));
+    allRecords.forEach((r) => r.faultTypes.forEach((f) => unique.add(f)));
     return [...unique].sort();
-  }, [adjustments]);
+  }, [allRecords]);
 
-  // ── Filtering / pagination ───────────────────────────────────────────────
-
-  const filteredAdjustments = adjustments.filter((record) => {
-    const search = searchTerm.toLowerCase();
-    const matchesSearch =
-      record.assetId.toLowerCase().includes(search) ||
-      record.itemName.toLowerCase().includes(search);
-
-    const matchesFault =
-      faultTypeFilter === "All" || record.faultTypes.includes(faultTypeFilter);
-
-    const recordIso = toIsoDateOnly(record.date);
-    const matchesFrom = !dateFrom || (recordIso !== null && recordIso >= dateFrom);
-    const matchesTo = !dateTo || (recordIso !== null && recordIso <= dateTo);
-
-    return matchesSearch && matchesFault && matchesFrom && matchesTo;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredAdjustments.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(adjustments.length / ITEMS_PER_PAGE));
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedAdjustments = filteredAdjustments.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE
-  );
+  const paginatedAdjustments = adjustments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const handleClearFilters = () => {
     setSearchTerm("");
@@ -127,27 +133,23 @@ export default function AdjustmentsPage() {
 
   // ── Export CSV ───────────────────────────────────────────────────────────
 
-  const handleExportCsv = () => {
-    const header = "Date & Time,Asset ID,Item Name,Fault Types,From,To,Adjusted By,Notes";
-    const lines = filteredAdjustments.map((r) => {
-      const faultCell = r.faultTypes.join(" | ").replace(/"/g, '""');
-      const notesCell = r.notes.replace(/"/g, '""');
-      return `"${r.date}","${r.assetId}","${r.itemName}","${faultCell}","${r.fromStatus}","${r.toStatus}","${r.adjustedBy}","${notesCell}"`;
-    });
-    const csvContent = [header, ...lines].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "inventory_adjustments.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  const handleExportCsv = async () => {
+    setExportError(null);
 
-  const catalogFor = (record: AdjustmentRecord): ItemCatalogEntry | undefined =>
-    itemCatalog[record.itemName];
+    try {
+      const blob = await apiFetchBlob("/adjustments/export");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "inventory_adjustments.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Failed to export adjustments.");
+    }
+  };
 
   return (
     <div className="adj-page">
@@ -169,6 +171,8 @@ export default function AdjustmentsPage() {
         </div>
       </div>
 
+      {exportError && <p className="field-error">{exportError}</p>}
+
       {/* ── Summary strip ─────────────────────────────────────────────────── */}
       <div className="adj-summary-strip">
         <div className="adj-summary-item">
@@ -177,7 +181,7 @@ export default function AdjustmentsPage() {
           </div>
           <div>
             <span>Total Adjustments</span>
-            <h3>{adjustments.length}</h3>
+            <h3>{allRecords.length}</h3>
           </div>
         </div>
 
@@ -276,7 +280,19 @@ export default function AdjustmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedAdjustments.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="adj-empty-row">
+                    Loading...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="adj-empty-row">
+                    Failed to load adjustments: {error}
+                  </td>
+                </tr>
+              ) : paginatedAdjustments.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="adj-empty-row">
                     No adjustments found.
@@ -322,9 +338,9 @@ export default function AdjustmentsPage() {
 
         <div className="adj-footer">
           <span>
-            Showing {filteredAdjustments.length === 0 ? 0 : startIndex + 1}–
-            {Math.min(startIndex + ITEMS_PER_PAGE, filteredAdjustments.length)} of{" "}
-            {filteredAdjustments.length} entries
+            Showing {adjustments.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, adjustments.length)} of{" "}
+            {adjustments.length} entries
           </span>
           <Pagination
             currentPage={currentPage}
@@ -363,19 +379,19 @@ export default function AdjustmentsPage() {
                   </div>
                   <div>
                     <span>Category</span>
-                    <p>{catalogFor(selectedRecord)?.category ?? "—"}</p>
+                    <p>{selectedRecord.category || "—"}</p>
                   </div>
                   <div>
                     <span>Brand</span>
-                    <p>{catalogFor(selectedRecord)?.brand ?? "—"}</p>
+                    <p>{selectedRecord.brand || "—"}</p>
                   </div>
                   <div>
                     <span>Model</span>
-                    <p>{catalogFor(selectedRecord)?.model ?? "—"}</p>
+                    <p>{selectedRecord.model || "—"}</p>
                   </div>
                   <div className="adj-drawer-full">
                     <span>Specs</span>
-                    <p>{catalogFor(selectedRecord)?.specs ?? "—"}</p>
+                    <p>{selectedRecord.specs || "—"}</p>
                   </div>
                 </div>
               </div>

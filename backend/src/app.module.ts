@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AdjustmentsModule } from './adjustments/adjustments.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { DropdownsModule } from './dropdowns/dropdowns.module.js';
@@ -33,6 +34,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     CustomersModule,
     ShipmentsModule,
     InventoryModule,
+    AdjustmentsModule,
     StaffModule,
     StockInModule,
     StockOutModule,

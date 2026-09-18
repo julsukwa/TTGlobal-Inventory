@@ -18,15 +18,21 @@ import "./FaultyStockPage.css";
 import { toFaultyStockItem } from "./faultyStockTypes";
 import type { FaultyStockItem } from "./faultyStockTypes";
 import type { BackendInventoryItem } from "../database/databaseTypes";
-import { dropdownValues } from "../dropdowns/mockDropdown";
 import { apiFetch } from "../../services/api";
 
 import { SearchBar, Pagination, Button, Modal } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { canEdit } from "../../utils/permissions";
 
+interface DropdownValueApi {
+  id: number;
+  category: string;
+  value: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 const ITEMS_PER_PAGE = 10;
-const ALL_FAULT_TYPES = dropdownValues.fault.map((f) => f.name);
 
 function buildSpecs(item: FaultyStockItem): string {
   return (
@@ -51,6 +57,21 @@ export default function FaultyStockPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fault type options — live from the Dropdowns module. The Edit Fault
+  // checklist below shows these with the item's existing types pre-checked,
+  // but disabled: see handleSaveEditFault for why fault types can't actually
+  // be changed here yet. (Named apart from the `faultOptions` filter-dropdown
+  // list further down, which is derived from the faulty items themselves.)
+  const [activeFaultTypes, setActiveFaultTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<DropdownValueApi[]>("/dropdowns/active/Fault")
+      .then((data) => setActiveFaultTypes(data.map((d) => d.value)))
+      .catch(() => {
+        // Checklist just stays empty on failure — it's read-only anyway.
+      });
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [batchFilter, setBatchFilter] = useState("All");
   const [faultFilter, setFaultFilter] = useState("All");
@@ -63,6 +84,7 @@ export default function FaultyStockPage() {
   const [editFaultTypes, setEditFaultTypes] = useState<string[]>([]);
   const [editNotes, setEditNotes] = useState("");
   const [editError, setEditError] = useState("");
+  const [savingEditFault, setSavingEditFault] = useState(false);
 
   const [restoreTarget, setRestoreTarget] = useState<FaultyStockItem | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -179,31 +201,36 @@ export default function FaultyStockPage() {
     setEditError("");
   };
 
-  const toggleEditFault = (fault: string) => {
-    setEditFaultTypes((prev) =>
-      prev.includes(fault) ? prev.filter((f) => f !== fault) : [...prev, fault]
-    );
-    setEditError("");
-  };
-
-  // TODO: wire up to the Adjustments endpoint once it exists (it doesn't
-  // yet) — that's what should actually persist a fault-type/notes change.
-  // Until then this only updates local state so the modal UI keeps working.
-  const handleSaveEditFault = () => {
+  // POST /adjustments only accepts OK → FAULTY transitions, so it rejects an
+  // item that's already FAULTY — it can't be reused to edit an existing
+  // adjustment's fault types. Absent that, this only persists the notes
+  // field via PATCH /inventory/:assetId.
+  // TODO: needs a PATCH /adjustments/:id endpoint for updating fault types
+  // on an existing adjustment — wire the checklist up to that once it exists.
+  const handleSaveEditFault = async () => {
     if (!editTarget) return;
-    if (editFaultTypes.length === 0) {
-      setEditError("Select at least one fault type.");
-      return;
+    setSavingEditFault(true);
+    setEditError("");
+
+    try {
+      await apiFetch(`/inventory/${encodeURIComponent(editTarget.assetId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: editNotes }),
+      });
+
+      const updated: FaultyStockItem = { ...editTarget, notes: editNotes };
+      setFaultyStock((prev) => prev.map((i) => (i.assetId === updated.assetId ? updated : i)));
+
+      if (selectedItem?.assetId === updated.assetId) {
+        setSelectedItem(updated);
+      }
+
+      handleCloseEditFault();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to save notes.");
+    } finally {
+      setSavingEditFault(false);
     }
-
-    const updated: FaultyStockItem = { ...editTarget, faultTypes: editFaultTypes, notes: editNotes };
-    setFaultyStock((prev) => prev.map((i) => (i.assetId === updated.assetId ? updated : i)));
-
-    if (selectedItem?.assetId === updated.assetId) {
-      setSelectedItem(updated);
-    }
-
-    handleCloseEditFault();
   };
 
   // ── Restore to Ok ─────────────────────────────────────────────────────────
@@ -676,18 +703,16 @@ export default function FaultyStockPage() {
             <div className="fs-field">
               <span className="fs-field-label">Fault Types</span>
               <div className="fs-fault-checklist">
-                {ALL_FAULT_TYPES.map((fault) => (
+                {activeFaultTypes.map((fault) => (
                   <label key={fault} className="fs-fault-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={editFaultTypes.includes(fault)}
-                      onChange={() => toggleEditFault(fault)}
-                    />
+                    <input type="checkbox" checked={editFaultTypes.includes(fault)} disabled />
                     {fault}
                   </label>
                 ))}
               </div>
-              {editError && <span className="field-error">{editError}</span>}
+              <span className="field-error">
+                Fault types cannot be changed after marking. Contact an administrator.
+              </span>
             </div>
 
             <div className="fs-field">
@@ -698,14 +723,15 @@ export default function FaultyStockPage() {
                 onChange={(e) => setEditNotes(e.target.value)}
                 placeholder="Any additional detail about the fault..."
               />
+              {editError && <span className="field-error">{editError}</span>}
             </div>
 
             <div className="modal-actions">
-              <Button variant="secondary" onClick={handleCloseEditFault}>
+              <Button variant="secondary" onClick={handleCloseEditFault} disabled={savingEditFault}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleSaveEditFault}>
-                Save Changes
+              <Button variant="primary" onClick={handleSaveEditFault} disabled={savingEditFault}>
+                {savingEditFault ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </>

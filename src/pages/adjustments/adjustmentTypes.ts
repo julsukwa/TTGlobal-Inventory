@@ -7,26 +7,64 @@
 //
 // AdjustmentSessionItem is the in-progress shape used while building a new
 // adjustment batch on NewAdjustmentPage (via manual entry or CSV upload),
-// before it's committed as an AdjustmentRecord.
+// before it's committed with POST /adjustments.
 //
-// BACKEND INTEGRATION SEAM:
-//   GET  /adjustments                     → list all adjustment records
-//   POST /adjustments                     → commit a batch of session items,
-//                                            returns the created AdjustmentRecord[]
-//   GET  /inventory?status=Ok&assetId=:id → asset lookup during manual entry
+// Backed by the real /adjustments API — see backend/src/adjustments. The
+// backend already returns category/brand/model/specs directly (joined from
+// the inventory item), so no separate client-side catalog is needed the way
+// the old mock data required.
 
 export type AdjustmentStatus = "Ok" | "Faulty";
+
+// Exactly what GET/POST /adjustments return — see backend/src/adjustments.
+export interface BackendAdjustmentRecord {
+  id: number;
+  assetId: string;
+  itemName: string;
+  category: string;
+  brand: string;
+  model: string;
+  specs: string;
+  faultTypes: string[];
+  fromStatus: string; // "OK"
+  toStatus: string; // "FAULTY"
+  notes: string;
+  date: string; // display string e.g. '12/06/2026 10:24'
+  adjustedBy: string; // username
+}
 
 export interface AdjustmentRecord {
   id: number;
   assetId: string;
-  itemName: string; // e.g. 'HP EliteBook 840 G8'
-  faultTypes: string[]; // multiple faults allowed per item e.g. ['LCD Spot', 'Keyboard Fault']
+  itemName: string;
+  category: string;
+  brand: string;
+  model: string;
+  specs: string;
+  faultTypes: string[];
   fromStatus: "Ok";
   toStatus: "Faulty";
-  date: string; // display string e.g. '12/06/2026 10:24 AM'
-  adjustedBy: string; // username
-  notes: string; // optional, may be empty string
+  date: string;
+  adjustedBy: string;
+  notes: string;
+}
+
+export function toAdjustmentRecord(raw: BackendAdjustmentRecord): AdjustmentRecord {
+  return {
+    id: raw.id,
+    assetId: raw.assetId,
+    itemName: raw.itemName,
+    category: raw.category,
+    brand: raw.brand,
+    model: raw.model,
+    specs: raw.specs,
+    faultTypes: raw.faultTypes,
+    fromStatus: "Ok",
+    toStatus: "Faulty",
+    date: raw.date,
+    adjustedBy: raw.adjustedBy,
+    notes: raw.notes,
+  };
 }
 
 export interface AdjustmentSessionItem {
