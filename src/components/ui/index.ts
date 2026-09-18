@@ -16,5 +16,8 @@ export type { PaginationProps } from "./Pagination";
 export { AssetSticker } from "../AssetSticker";
 export type { AssetStickerProps } from "../AssetSticker";
 
+export { ListNumberBadge } from "../ListNumberBadge";
+export type { ListNumberBadgeProps } from "../ListNumberBadge";
+
 export { StickerPrintPreview } from "../StickerPrintPreview";
 export type { StickerPrintPreviewProps } from "../StickerPrintPreview";

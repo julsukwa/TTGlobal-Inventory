@@ -18,6 +18,7 @@ import type { BackendInventoryItem } from "../database/databaseTypes";
 export interface FaultyStockItem {
   assetId: string;
   category: string;
+  condition: string;
   brand: string;
   model: string;
   processor: string;
@@ -30,8 +31,11 @@ export interface FaultyStockItem {
   dateMarkedFaulty: string; // display string e.g. '18/06/2026 10:34 AM'
   adjustedBy: string; // username of who marked it faulty — not available yet, see above
   shipmentId: string;
+  shipmentName: string;
+  vendorId: string;
   batchId: string;
   listNumber: string;
+  importDate: string; // display string derived from importedAt — shown as "Created At"
   notes: string;
 }
 
@@ -50,6 +54,7 @@ export function toFaultyStockItem(raw: BackendInventoryItem): FaultyStockItem {
   return {
     assetId: raw.assetId,
     category: raw.category,
+    condition: raw.condition,
     brand: raw.brand,
     model: raw.model,
     processor: raw.processor,
@@ -62,8 +67,11 @@ export function toFaultyStockItem(raw: BackendInventoryItem): FaultyStockItem {
     dateMarkedFaulty: formatDateTime(raw.updatedAt),
     adjustedBy: "—",
     shipmentId: raw.shipment.shipmentId,
+    shipmentName: raw.shipment.shipmentName,
+    vendorId: raw.shipment.vendor.vendorId,
     batchId: raw.batch.batchId,
     listNumber: raw.listNumber,
+    importDate: formatDateTime(raw.importedAt),
     notes: raw.notes,
   };
 }

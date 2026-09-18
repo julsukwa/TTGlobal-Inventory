@@ -258,6 +258,7 @@ export class AdjustmentsService {
     const item = adjustment.inventory;
     return {
       id: adjustment.id,
+      listNumber: item.listNumber,
       assetId: item.assetId,
       itemName: `${item.brand} ${item.model}`.trim(),
       category: item.category,

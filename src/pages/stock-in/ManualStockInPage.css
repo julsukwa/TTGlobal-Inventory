@@ -582,17 +582,6 @@
 .condition-refurb { background: var(--color-warning-bg); color: var(--color-warning-text); }
 .condition-used   { background: var(--color-danger-bg); color: #b91c1c; }
 
-.list-number-badge {
-  display: inline-block;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--color-primary);
-}
-
 .asset-id-generated {
   font-size: var(--font-size-xs);
   color: var(--color-text-faint);

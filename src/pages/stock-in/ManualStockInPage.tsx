@@ -16,6 +16,7 @@ import {
 
 import "./ManualStockInPage.css";
 import { apiFetch } from "../../services/api";
+import { ListNumberBadge } from "../../components/ListNumberBadge";
 import type { Shipment } from "../shipments/shipmentTypes";
 import type { ListNumberGroup, SessionInventoryItem } from "./manualStockInTypes";
 import { toStockInApiItem, type StockInResult } from "./stockInApi";
@@ -981,7 +982,7 @@ export default function ManualStockInPage() {
                         >
                           <td className="row-index">{runningIndex}</td>
                           <td>
-                            <span className="list-number-badge">{item.listNumber}</span>
+                            <ListNumberBadge value={item.listNumber} />
                           </td>
                           <td>
                             {item.assetIdSource === "generated" ? (

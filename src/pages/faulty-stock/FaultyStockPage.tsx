@@ -12,7 +12,18 @@
 // unsupported "condition" filter on top of its server-filtered results.
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Eye, Pencil, Printer, RotateCcw, X, AlertTriangle, AlertOctagon, Layers } from "lucide-react";
+import {
+  Download,
+  Eye,
+  Pencil,
+  Printer,
+  RotateCcw,
+  Search,
+  X,
+  AlertTriangle,
+  AlertOctagon,
+  Layers,
+} from "lucide-react";
 
 import "./FaultyStockPage.css";
 import { toFaultyStockItem } from "./faultyStockTypes";
@@ -21,7 +32,7 @@ import type { BackendInventoryItem } from "../database/databaseTypes";
 import { apiFetch } from "../../services/api";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
 
-import { SearchBar, Pagination, Button, Modal, StickerPrintPreview } from "../../components/ui";
+import { Pagination, Button, Modal, StickerPrintPreview, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { canEdit } from "../../utils/permissions";
@@ -56,22 +67,7 @@ interface InventoryDetailWithAdjustments extends BackendInventoryItem {
   adjustments: { id: number }[];
 }
 
-const ITEMS_PER_PAGE = 10;
-
-function buildSpecs(item: FaultyStockItem): string {
-  return (
-    [item.processor, item.generation, item.ram, item.storage, item.speed]
-      .filter(Boolean)
-      .join(" • ") || "—"
-  );
-}
-
-/** Splits the "DD/MM/YYYY hh:mm AM/PM" display string into its date and time
- * halves so the table/drawer can render them on separate lines. */
-function splitDateMarked(value: string): { date: string; time: string } {
-  const [datePart, ...rest] = value.split(" ");
-  return { date: datePart ?? "", time: rest.join(" ") };
-}
+const ITEMS_PER_PAGE = 20;
 
 export default function FaultyStockPage() {
   const { user } = useAuth();
@@ -190,7 +186,9 @@ export default function FaultyStockPage() {
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  // Clamped: restoring the last item on a page can shrink the list under it.
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
   const paginatedItems = filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const handleClearFilters = () => {
@@ -343,6 +341,9 @@ export default function FaultyStockPage() {
 
   const handleExportPdf = () => window.print();
 
+  const rangeStart = filteredItems.length === 0 ? 0 : startIndex + 1;
+  const rangeEnd = Math.min(startIndex + ITEMS_PER_PAGE, filteredItems.length);
+
   return (
     <div className="fs-page">
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -396,193 +397,225 @@ export default function FaultyStockPage() {
         </div>
       </div>
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div className="fs-filters-card">
-        <SearchBar
-          value={searchTerm}
-          onChange={(value) => {
-            setSearchTerm(value);
-            setCurrentPage(1);
-          }}
-          placeholder="Search by asset ID, model or list number..."
-          width={280}
-        />
-
-        <select
-          value={batchFilter}
-          onChange={(e) => {
-            setBatchFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Batches</option>
-          {batchIds.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={faultFilter}
-          onChange={(e) => {
-            setFaultFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Faults</option>
-          {faultOptions.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={modelFilter}
-          onChange={(e) => {
-            setModelFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Models</option>
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        <button className="fs-clear-filters-btn" onClick={handleClearFilters}>
-          Clear Filters
-        </button>
-      </div>
-
-      {/* ── Table ─────────────────────────────────────────────────────────── */}
+      {/* ── Table card (toolbar + table + footer) ─────────────────────────── */}
       <div className="fs-table-card">
+        <div className="fs-toolbar">
+          <div className="fs-search">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search by asset ID, model or list number..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+
+          <div className="fs-filter">
+            <select
+              value={batchFilter}
+              onChange={(e) => {
+                setBatchFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Batches</option>
+              {batchIds.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fs-filter">
+            <select
+              value={faultFilter}
+              onChange={(e) => {
+                setFaultFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Faults</option>
+              {faultOptions.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fs-filter">
+            <select
+              value={modelFilter}
+              onChange={(e) => {
+                setModelFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Models</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button className="fs-clear-filters-btn" onClick={handleClearFilters}>
+            Clear Filters
+          </button>
+        </div>
+
         <div className="fs-table-wrap">
           <table className="fs-table">
             <thead>
               <tr>
+                <th>List Number</th>
                 <th>Asset ID</th>
+                <th>Batch ID</th>
+                <th>Category</th>
+                <th>Brand</th>
                 <th>Model</th>
-                <th>Specs Details</th>
+                <th>Processor</th>
+                <th>Generation</th>
+                <th>RAM</th>
+                <th>Storage</th>
+                <th>Speed</th>
                 <th>Comments</th>
+                <th>Status</th>
                 <th>Faults</th>
-                <th>Date Marked Faulty</th>
-                <th>Actions</th>
+                <th>Created At</th>
+                <th className="fs-actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="fs-empty-row">
+                  <td colSpan={16} className="fs-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="fs-empty-row">
+                  <td colSpan={16} className="fs-empty-row">
                     Failed to load faulty stock: {error}
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="fs-empty-row">
+                  <td colSpan={16} className="fs-empty-row">
                     No faulty items match your search/filters.
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => {
-                  const { date, time } = splitDateMarked(item.dateMarkedFaulty);
-                  const visibleFaults = item.faultTypes.slice(0, 2);
-                  const extraFaultCount = item.faultTypes.length - visibleFaults.length;
+                paginatedItems.map((item) => (
+                  <tr key={item.assetId}>
+                    <td>
+                      <ListNumberBadge value={item.listNumber} />
+                    </td>
+                    <td className="fs-asset-id">{item.assetId}</td>
+                    <td>
+                      <span className="fs-batch-pill">{item.batchId}</span>
+                    </td>
+                    <td>
+                      <span className="fs-category-badge">{item.category}</span>
+                    </td>
+                    <td>{item.brand}</td>
+                    <td>{item.model}</td>
+                    <td className="fs-specs-cell">{item.processor || "—"}</td>
+                    <td className="fs-specs-cell">{item.generation || "—"}</td>
+                    <td className="fs-specs-cell">{item.ram || "—"}</td>
+                    <td className="fs-specs-cell">{item.storage || "—"}</td>
+                    <td className="fs-specs-cell">{item.speed || "—"}</td>
+                    <td>
+                      {item.screenType ? (
+                        <span
+                          className={`fs-comment-badge ${
+                            item.screenType === "Touch Screen"
+                              ? "fs-comment-touch"
+                              : "fs-comment-nontouch"
+                          }`}
+                        >
+                          {item.screenType}
+                        </span>
+                      ) : (
+                        <span className="fs-comment-blank">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="fs-status-pill fs-status-faulty">Faulty</span>
+                    </td>
+                    <td>
+                      <div className="fs-fault-pills">
+                        {item.faultTypes.slice(0, 2).map((fault) => (
+                          <span key={fault} className="fs-fault-pill">
+                            {fault}
+                          </span>
+                        ))}
+                        {item.faultTypes.length > 2 && (
+                          <span className="fs-fault-pill-more">+{item.faultTypes.length - 2} more</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="fs-date-cell">{item.importDate}</td>
+                    <td className="fs-actions-col">
+                      <div className="fs-actions">
+                        <button
+                          className="fs-action-btn"
+                          title="View details"
+                          onClick={() => handleViewDetails(item)}
+                        >
+                          <Eye size={14} />
+                        </button>
 
-                  return (
-                    <tr key={item.assetId}>
-                      <td className="fs-asset-id">{item.assetId}</td>
-                      <td>
-                        <div className="fs-model-cell">
-                          <span className="fs-model-name">{item.model}</span>
-                          <span className="fs-model-brand">{item.brand}</span>
-                        </div>
-                      </td>
-                      <td className="fs-specs-cell">{buildSpecs(item)}</td>
-                      <td className="fs-comments-cell">{item.screenType || "—"}</td>
-                      <td>
-                        <div className="fs-fault-pills">
-                          {visibleFaults.map((fault) => (
-                            <span key={fault} className="fs-fault-pill">
-                              {fault}
-                            </span>
-                          ))}
-                          {extraFaultCount > 0 && (
-                            <span className="fs-fault-pill-more">+{extraFaultCount} more</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="fs-date-cell">
-                          <span className="fs-date-value">{date}</span>
-                          <span className="fs-time-value">{time}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="fs-actions">
+                        {!isReadOnly && (
                           <button
                             className="fs-action-btn"
-                            title="View details"
-                            onClick={() => handleViewDetails(item)}
+                            title="Edit fault"
+                            onClick={() => handleOpenEditFault(item)}
                           >
-                            <Eye size={14} />
+                            <Pencil size={14} />
                           </button>
+                        )}
 
-                          {!isReadOnly && (
-                            <button
-                              className="fs-action-btn"
-                              title="Edit fault"
-                              onClick={() => handleOpenEditFault(item)}
-                            >
-                              <Pencil size={14} />
-                            </button>
-                          )}
-
-                          {!isReadOnly && (
-                            <button
-                              className="fs-action-btn"
-                              title="Restore to Ok"
-                              onClick={() => {
-                                setRestoreTarget(item);
-                                setRestoreError(null);
-                              }}
-                            >
-                              <RotateCcw size={14} />
-                            </button>
-                          )}
-
+                        {!isReadOnly && (
                           <button
                             className="fs-action-btn"
-                            title="Print asset sticker"
-                            onClick={() => handlePrintSticker(item)}
+                            title="Restore to Ok"
+                            onClick={() => {
+                              setRestoreTarget(item);
+                              setRestoreError(null);
+                            }}
                           >
-                            <Printer size={14} />
+                            <RotateCcw size={14} />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                        )}
+
+                        <button
+                          className="fs-action-btn"
+                          title="Print asset sticker"
+                          onClick={() => handlePrintSticker(item)}
+                        >
+                          <Printer size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
 
-        <div className="fs-footer">
+        <div className="fs-table-footer">
           <span>
-            Showing {paginatedItems.length} of {filteredItems.length} items
+            Showing {rangeStart}–{rangeEnd} of {filteredItems.length} entries
           </span>
           <Pagination
-            currentPage={currentPage}
+            currentPage={page}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
           />
@@ -594,27 +627,35 @@ export default function FaultyStockPage() {
         <div className="fs-drawer-overlay" onClick={handleCloseDrawer}>
           <div className="fs-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="fs-drawer-header">
-              <div>
-                <h2>{selectedItem.assetId}</h2>
-                <p>Faulty Item Detail</p>
-              </div>
+              <h2>Asset Details</h2>
               <button className="fs-drawer-close" onClick={handleCloseDrawer}>
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
             <div className="fs-drawer-body">
-              {/* Asset information */}
+              {/* Asset overview */}
+              <div className="fs-drawer-overview">
+                <span className="fs-drawer-asset-id">{selectedItem.assetId}</span>
+                <h3>
+                  {selectedItem.brand} {selectedItem.model}
+                </h3>
+                <div className="fs-drawer-badges">
+                  <span className="fs-status-pill fs-status-faulty">Faulty</span>
+                </div>
+              </div>
+
+              {/* Technical specifications */}
               <div className="fs-drawer-section">
-                <h4>Asset Information</h4>
+                <h4>Technical Specifications</h4>
                 <div className="fs-drawer-grid">
-                  <div>
-                    <span>Asset ID</span>
-                    <p className="fs-drawer-mono">{selectedItem.assetId}</p>
-                  </div>
                   <div>
                     <span>Category</span>
                     <p>{selectedItem.category}</p>
+                  </div>
+                  <div>
+                    <span>Condition</span>
+                    <p>{selectedItem.condition || "—"}</p>
                   </div>
                   <div>
                     <span>Brand</span>
@@ -624,13 +665,6 @@ export default function FaultyStockPage() {
                     <span>Model</span>
                     <p>{selectedItem.model}</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Technical specifications */}
-              <div className="fs-drawer-section">
-                <h4>Technical Specifications</h4>
-                <div className="fs-drawer-grid">
                   <div>
                     <span>Processor</span>
                     <p>{selectedItem.processor || "—"}</p>
@@ -652,8 +686,39 @@ export default function FaultyStockPage() {
                     <p>{selectedItem.speed || "—"}</p>
                   </div>
                   <div>
-                    <span>Screen Type</span>
+                    <span>Comment</span>
                     <p>{selectedItem.screenType || "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Import information */}
+              <div className="fs-drawer-section">
+                <h4>Import Information</h4>
+                <div className="fs-drawer-grid">
+                  <div>
+                    <span>Shipment ID</span>
+                    <p>{selectedItem.shipmentId}</p>
+                  </div>
+                  <div>
+                    <span>Shipment Name</span>
+                    <p>{selectedItem.shipmentName}</p>
+                  </div>
+                  <div>
+                    <span>Vendor</span>
+                    <p>{selectedItem.vendorId}</p>
+                  </div>
+                  <div>
+                    <span>Batch ID</span>
+                    <p>{selectedItem.batchId}</p>
+                  </div>
+                  <div>
+                    <span>List Number</span>
+                    <p>{selectedItem.listNumber || "-"}</p>
+                  </div>
+                  <div>
+                    <span>Date Imported</span>
+                    <p>{selectedItem.importDate}</p>
                   </div>
                 </div>
               </div>
@@ -680,45 +745,38 @@ export default function FaultyStockPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Traceability */}
-              <div className="fs-drawer-section">
-                <h4>Traceability</h4>
-                <div className="fs-drawer-grid">
-                  <div>
-                    <span>Shipment ID</span>
-                    <p>{selectedItem.shipmentId}</p>
-                  </div>
-                  <div>
-                    <span>Batch ID</span>
-                    <p className="fs-drawer-mono">{selectedItem.batchId}</p>
-                  </div>
-                  <div>
-                    <span>List Number</span>
-                    <p>{selectedItem.listNumber}</p>
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {!isReadOnly && (
-              <div className="fs-drawer-footer">
-                <Button variant="secondary" onClick={() => handleOpenEditFault(selectedItem)}>
-                  <Pencil size={14} />
-                  Edit Fault
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setRestoreTarget(selectedItem);
-                    setRestoreError(null);
-                  }}
-                >
-                  <RotateCcw size={14} />
-                  Restore to Ok
-                </Button>
-              </div>
-            )}
+            <div className="fs-drawer-footer">
+              <button
+                className="fs-drawer-btn-secondary"
+                onClick={() => handlePrintSticker(selectedItem)}
+              >
+                <Printer size={14} />
+                Print Sticker
+              </button>
+              {!isReadOnly && (
+                <>
+                  <button
+                    className="fs-drawer-btn-secondary"
+                    onClick={() => handleOpenEditFault(selectedItem)}
+                  >
+                    <Pencil size={14} />
+                    Edit Fault
+                  </button>
+                  <button
+                    className="fs-drawer-btn-primary"
+                    onClick={() => {
+                      setRestoreTarget(selectedItem);
+                      setRestoreError(null);
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    Restore to Ok
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

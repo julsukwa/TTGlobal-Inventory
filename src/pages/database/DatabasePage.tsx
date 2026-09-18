@@ -18,6 +18,7 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Download,
   Eye,
+  Search,
   MoreVertical,
   X,
   Pencil,
@@ -35,14 +36,7 @@ import type { InventoryAsset, BackendInventoryItem, InventoryStats } from "./dat
 import { apiFetch } from "../../services/api";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
 
-import {
-  StatusBadge,
-  SearchBar,
-  Pagination,
-  Button,
-  Modal,
-  StickerPrintPreview,
-} from "../../components/ui";
+import { Pagination, Button, Modal, StickerPrintPreview, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
 
 function toStickerProps(item: InventoryAsset): AssetStickerProps {
@@ -60,15 +54,7 @@ function toStickerProps(item: InventoryAsset): AssetStickerProps {
   };
 }
 
-const ITEMS_PER_PAGE = 10;
-
-function buildSpecs(item: InventoryAsset): string {
-  return (
-    [item.processor, item.generation, item.ram, item.storage, item.speed]
-      .filter(Boolean)
-      .join(" • ") || "—"
-  );
-}
+const ITEMS_PER_PAGE = 20;
 
 export default function DatabasePage() {
   // ── Stats (summary strip) ────────────────────────────────────────────────
@@ -129,6 +115,7 @@ export default function DatabasePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const openMenuRef = useRef<HTMLDivElement>(null);
   const [restoreTarget, setRestoreTarget] = useState<InventoryAsset | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -147,8 +134,17 @@ export default function DatabasePage() {
       }
     };
 
+    // The menu is position: fixed, so it would drift from its button on scroll.
+    const closeMenu = () => setOpenMenuId(null);
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+    };
   }, [openMenuId]);
 
   // ── Filter option lists — derived from the unfiltered snapshot ──────────
@@ -389,6 +385,33 @@ export default function DatabasePage() {
   // gets a real PDF out without adding a new dependency for one button.
   const handleExportPdf = () => window.print();
 
+  // Opens the row menu below its button, or above it when there is not enough
+  // room left in the viewport for it.
+  const toggleRowMenu = (button: HTMLElement, item: InventoryAsset) => {
+    if (openMenuId === item.assetId) {
+      setOpenMenuId(null);
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    const menuHeight = item.status === "Faulty" ? 112 : 76;
+    const opensDown = rect.bottom + 4 + menuHeight <= window.innerHeight;
+    setMenuPos({
+      top: opensDown ? rect.bottom + 4 : rect.top - 4 - menuHeight,
+      right: window.innerWidth - rect.right,
+    });
+    setOpenMenuId(item.assetId);
+  };
+
+  const statusClass = (status: InventoryAsset["status"]) =>
+    status === "Ok" ? "db-status-ok" : status === "Faulty" ? "db-status-faulty" : "db-status-issued";
+
+  const sourceClass = (source: InventoryAsset["assetIdSource"]) =>
+    source === "Provided" ? "db-source-provided" : "db-source-generated";
+
+  const rangeStart = inventory.length === 0 ? 0 : startIndex + 1;
+  const rangeEnd = Math.min(startIndex + ITEMS_PER_PAGE, inventory.length);
+  const showTotalContext = stats !== null && inventory.length !== totalInventory;
+
   return (
     <div className="db-page">
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -454,150 +477,161 @@ export default function DatabasePage() {
         </div>
       </div>
 
-      {/* ── Universal search ─────────────────────────────────────────────── */}
-      <div className="db-universal-search">
-        <SearchBar
-          value={searchTerm}
-          onChange={(value) => {
-            setSearchTerm(value);
-            setCurrentPage(1);
-          }}
-          placeholder="Search by Asset ID, Model, Batch ID or List Number..."
-        />
-      </div>
-
-      {/* ── Advanced filters ─────────────────────────────────────────────── */}
-      <div className="db-filters-card">
-        <select
-          value={categoryFilter}
-          onChange={(e) => {
-            setCategoryFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={brandFilter}
-          onChange={(e) => {
-            setBrandFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Brands</option>
-          {brands.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Statuses</option>
-          <option value="Ok">Ok</option>
-          <option value="Faulty">Faulty</option>
-          <option value="Issued">Issued</option>
-        </select>
-
-        <select
-          value={vendorFilter}
-          onChange={(e) => {
-            setVendorFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Vendors</option>
-          {vendors.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={shipmentFilter}
-          onChange={(e) => {
-            setShipmentFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All Shipments</option>
-          {shipments.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={idSourceFilter}
-          onChange={(e) => {
-            setIdSourceFilter(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="All">All ID Sources</option>
-          <option value="Generated">Generated</option>
-          <option value="Provided">Provided</option>
-        </select>
-
-        <button className="db-clear-filters-btn" onClick={handleClearFilters}>
-          Clear Filters
-        </button>
-      </div>
-
-      {/* ── Results count ─────────────────────────────────────────────────── */}
-      <p className="db-results-count">
-        Showing {inventory.length} of {stats ? totalInventory : inventory.length} results
-      </p>
-
-      {/* ── Table ─────────────────────────────────────────────────────────── */}
+      {/* ── Table card (toolbar + table + footer) ─────────────────────────── */}
       <div className="db-table-card">
+        <div className="db-toolbar">
+          <div className="db-search">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search by Asset ID, Model, Batch ID or List Number..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={brandFilter}
+              onChange={(e) => {
+                setBrandFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Brands</option>
+              {brands.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Ok">Ok</option>
+              <option value="Faulty">Faulty</option>
+              <option value="Issued">Issued</option>
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={vendorFilter}
+              onChange={(e) => {
+                setVendorFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Vendors</option>
+              {vendors.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={shipmentFilter}
+              onChange={(e) => {
+                setShipmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Shipments</option>
+              {shipments.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={idSourceFilter}
+              onChange={(e) => {
+                setIdSourceFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All ID Sources</option>
+              <option value="Generated">Generated</option>
+              <option value="Provided">Provided</option>
+            </select>
+          </div>
+
+          <button className="db-clear-filters-btn" onClick={handleClearFilters}>
+            Clear Filters
+          </button>
+        </div>
+
         <div className="db-table-wrap">
           <table className="db-table">
             <thead>
               <tr>
-                <th>Asset ID</th>
-                <th>ID Source</th>
                 <th>List Number</th>
+                <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
                 <th>Brand</th>
                 <th>Model</th>
-                <th>Specs</th>
+                <th>Processor</th>
+                <th>Generation</th>
+                <th>RAM</th>
+                <th>Storage</th>
+                <th>Speed</th>
+                <th>Comments</th>
                 <th>Status</th>
-                <th>Import Date</th>
-                <th>Actions</th>
+                <th>Created At</th>
+                <th className="db-actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="db-empty-row">
+                  <td colSpan={15} className="db-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={11} className="db-empty-row">
+                  <td colSpan={15} className="db-empty-row">
                     Failed to load inventory: {error}
                   </td>
                 </tr>
               ) : paginatedAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="db-empty-row">
+                  <td colSpan={15} className="db-empty-row">
                     No inventory records match your search/filters.
                   </td>
                 </tr>
@@ -605,42 +639,44 @@ export default function DatabasePage() {
                 paginatedAssets.map((item) => (
                   <tr key={item.assetId}>
                     <td>
-                      <span className="db-asset-id-cell">
-                        <span className="db-asset-id">{item.assetId}</span>
-                        <span
-                          className={`db-letter-badge ${
-                            item.assetIdSource === "Provided"
-                              ? "db-letter-badge-grey"
-                              : "db-letter-badge-blue"
-                          }`}
-                          title={item.assetIdSource}
-                        >
-                          {item.assetIdSource === "Provided" ? "P" : "G"}
-                        </span>
-                      </span>
+                      <ListNumberBadge value={item.listNumber} />
+                    </td>
+                    <td className="db-asset-id">{item.assetId}</td>
+                    <td>
+                      <span className="db-batch-pill">{item.batchId}</span>
                     </td>
                     <td>
-                      <span
-                        className={`db-source-pill ${
-                          item.assetIdSource === "Provided"
-                            ? "db-source-provided"
-                            : "db-source-generated"
-                        }`}
-                      >
-                        {item.assetIdSource}
-                      </span>
+                      <span className="db-category-badge">{item.category}</span>
                     </td>
-                    <td>{item.listNumber}</td>
-                    <td className="db-batch-id">{item.batchId}</td>
-                    <td>{item.category}</td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
-                    <td className="db-specs-cell">{buildSpecs(item)}</td>
+                    <td className="db-specs-cell">{item.processor || "—"}</td>
+                    <td className="db-specs-cell">{item.generation || "—"}</td>
+                    <td className="db-specs-cell">{item.ram || "—"}</td>
+                    <td className="db-specs-cell">{item.storage || "—"}</td>
+                    <td className="db-specs-cell">{item.speed || "—"}</td>
                     <td>
-                      <StatusBadge status={item.status} />
+                      {item.screenType ? (
+                        <span
+                          className={`db-comment-badge ${
+                            item.screenType === "Touch Screen"
+                              ? "db-comment-touch"
+                              : "db-comment-nontouch"
+                          }`}
+                        >
+                          {item.screenType}
+                        </span>
+                      ) : (
+                        <span className="db-comment-blank">—</span>
+                      )}
                     </td>
-                    <td className="db-muted-cell">{item.importDate}</td>
                     <td>
+                      <span className={`db-status-pill ${statusClass(item.status)}`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="db-date-cell">{item.importDate}</td>
+                    <td className="db-actions-col">
                       <div className="db-actions">
                         <button
                           className="db-action-btn"
@@ -657,15 +693,13 @@ export default function DatabasePage() {
                           <button
                             className="db-action-btn"
                             title="More actions"
-                            onClick={() =>
-                              setOpenMenuId(openMenuId === item.assetId ? null : item.assetId)
-                            }
+                            onClick={(e) => toggleRowMenu(e.currentTarget, item)}
                           >
                             <MoreVertical size={14} />
                           </button>
 
                           {openMenuId === item.assetId && (
-                            <div className="db-row-menu">
+                            <div className="db-row-menu" style={menuPos ?? undefined}>
                               <button onClick={() => handleEditFromMenu(item)}>
                                 <Pencil size={13} />
                                 Edit Details
@@ -704,11 +738,10 @@ export default function DatabasePage() {
           </table>
         </div>
 
-        <div className="db-footer">
+        <div className="db-table-footer">
           <span>
-            Showing {inventory.length === 0 ? 0 : startIndex + 1}–
-            {Math.min(startIndex + ITEMS_PER_PAGE, inventory.length)} of{" "}
-            {inventory.length} entries
+            Showing {rangeStart}–{rangeEnd} of {inventory.length} entries
+            {showTotalContext ? ` (${totalInventory} total in database)` : ""}
           </span>
           <Pagination
             currentPage={currentPage}
@@ -723,44 +756,26 @@ export default function DatabasePage() {
         <div className="db-drawer-overlay" onClick={handleCloseDrawer}>
           <div className="db-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="db-drawer-header">
-              <div>
-                <h2>{selectedAsset.assetId}</h2>
-                <p>Asset Information</p>
-              </div>
+              <h2>Asset Details</h2>
               <button className="db-drawer-close" onClick={handleCloseDrawer}>
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
             <div className="db-drawer-body">
               {/* Asset overview */}
-              <div className="db-drawer-section">
-                <h4>Asset Overview</h4>
-                <div className="db-drawer-grid">
-                  <div>
-                    <span>Asset ID</span>
-                    <p className="db-drawer-mono">{selectedAsset.assetId}</p>
-                  </div>
-                  <div>
-                    <span>ID Source</span>
-                    <span
-                      className={`db-source-pill ${
-                        selectedAsset.assetIdSource === "Provided"
-                          ? "db-source-provided"
-                          : "db-source-generated"
-                      }`}
-                    >
-                      {selectedAsset.assetIdSource}
-                    </span>
-                  </div>
-                  <div>
-                    <span>Status</span>
-                    <StatusBadge status={selectedAsset.status} />
-                  </div>
-                  <div>
-                    <span>List Number</span>
-                    <p>{selectedAsset.listNumber}</p>
-                  </div>
+              <div className="db-drawer-overview">
+                <span className="db-drawer-asset-id">{selectedAsset.assetId}</span>
+                <h3>
+                  {selectedAsset.brand} {selectedAsset.model}
+                </h3>
+                <div className="db-drawer-badges">
+                  <span className={`db-status-pill ${statusClass(selectedAsset.status)}`}>
+                    {selectedAsset.status}
+                  </span>
+                  <span className={`db-source-pill ${sourceClass(selectedAsset.assetIdSource)}`}>
+                    {selectedAsset.assetIdSource}
+                  </span>
                 </div>
               </div>
 
@@ -773,6 +788,10 @@ export default function DatabasePage() {
                     <div>
                       <span>Category</span>
                       <p>{selectedAsset.category}</p>
+                    </div>
+                    <div>
+                      <span>Condition</span>
+                      <p>{selectedAsset.condition || "—"}</p>
                     </div>
                     <div>
                       <span>Brand</span>
@@ -803,12 +822,24 @@ export default function DatabasePage() {
                       <p>{selectedAsset.speed || "—"}</p>
                     </div>
                     <div>
-                      <span>Screen Type</span>
+                      <span>Comment</span>
                       <p>{selectedAsset.screenType || "—"}</p>
+                    </div>
+                    <div className="db-drawer-full-col">
+                      <span>Additional Information</span>
+                      <p>{selectedAsset.notes || "—"}</p>
                     </div>
                   </div>
                 ) : (
                   <div className="db-edit-grid">
+                    <label>
+                      Category
+                      <input value={selectedAsset.category} disabled title="Protected field" />
+                    </label>
+                    <label>
+                      Condition
+                      <input value={selectedAsset.condition || "—"} disabled title="Protected field" />
+                    </label>
                     <label>
                       Brand
                       <input
@@ -859,18 +890,18 @@ export default function DatabasePage() {
                       />
                     </label>
                     <label>
-                      Screen Type
+                      Comment
                       <select
                         value={editForm?.screenType ?? ""}
                         onChange={(e) => handleEditFieldChange("screenType", e.target.value)}
                       >
-                        <option value="">Select screen type</option>
+                        <option value="">Select comment</option>
                         <option value="Touch Screen">Touch Screen</option>
                         <option value="Non-Touch">Non-Touch</option>
                       </select>
                     </label>
                     <label className="db-edit-full-col">
-                      Notes
+                      Additional Information
                       <textarea
                         value={editForm?.notes ?? ""}
                         onChange={(e) => handleEditFieldChange("notes", e.target.value)}
@@ -881,8 +912,8 @@ export default function DatabasePage() {
                 )}
               </div>
 
-              {/* Import information */}
-              <div className="db-drawer-section">
+              {/* Import information — protected, shown greyed while editing */}
+              <div className={`db-drawer-section ${isEditing ? "db-drawer-protected" : ""}`}>
                 <h4>Import Information</h4>
                 <div className="db-drawer-grid">
                   <div>
@@ -890,15 +921,23 @@ export default function DatabasePage() {
                     <p>{selectedAsset.shipmentId}</p>
                   </div>
                   <div>
-                    <span>Vendor ID</span>
+                    <span>Shipment Name</span>
+                    <p>{selectedAsset.shipmentName}</p>
+                  </div>
+                  <div>
+                    <span>Vendor</span>
                     <p>{selectedAsset.vendorId}</p>
                   </div>
                   <div>
                     <span>Batch ID</span>
-                    <p className="db-drawer-mono">{selectedAsset.batchId}</p>
+                    <p>{selectedAsset.batchId}</p>
                   </div>
                   <div>
-                    <span>Import Date</span>
+                    <span>List Number</span>
+                    <p>{selectedAsset.listNumber}</p>
+                  </div>
+                  <div>
+                    <span>Date Imported</span>
                     <p>{selectedAsset.importDate}</p>
                   </div>
                 </div>
@@ -915,28 +954,6 @@ export default function DatabasePage() {
                       </span>
                     ))}
                   </div>
-                  {selectedAsset.notes && <p className="db-drawer-notes">{selectedAsset.notes}</p>}
-                </div>
-              )}
-
-              {/* Identification */}
-              {!isEditing && (
-                <div className="db-drawer-section">
-                  <h4>Identification</h4>
-                  <div className="db-drawer-grid">
-                    <div>
-                      <span>Asset ID</span>
-                      <p className="db-drawer-mono">{selectedAsset.assetId}</p>
-                    </div>
-                    <div>
-                      <span>Batch ID</span>
-                      <p className="db-drawer-mono">{selectedAsset.batchId}</p>
-                    </div>
-                    <div>
-                      <span>List Number</span>
-                      <p>{selectedAsset.listNumber}</p>
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -946,23 +963,34 @@ export default function DatabasePage() {
             <div className="db-drawer-footer">
               {!isEditing ? (
                 <>
-                  <Button variant="secondary" onClick={() => handlePrintSticker(selectedAsset)}>
+                  <button
+                    className="db-drawer-btn-secondary"
+                    onClick={() => handlePrintSticker(selectedAsset)}
+                  >
                     <Printer size={14} />
                     Print Sticker
-                  </Button>
-                  <Button variant="primary" onClick={handleStartEdit}>
+                  </button>
+                  <button className="db-drawer-btn-primary" onClick={handleStartEdit}>
                     <Pencil size={14} />
                     Edit Details
-                  </Button>
+                  </button>
                 </>
               ) : (
                 <>
-                  <Button variant="secondary" onClick={handleCancelEdit} disabled={saving}>
+                  <button
+                    className="db-drawer-btn-secondary"
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                  >
                     Cancel
-                  </Button>
-                  <Button variant="primary" onClick={handleSaveEdit} disabled={saving}>
+                  </button>
+                  <button
+                    className="db-drawer-btn-primary"
+                    onClick={handleSaveEdit}
+                    disabled={saving}
+                  >
                     {saving ? "Saving..." : "Save Changes"}
-                  </Button>
+                  </button>
                 </>
               )}
             </div>

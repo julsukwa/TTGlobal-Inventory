@@ -4,7 +4,10 @@ import { Search, Eye } from "lucide-react";
 
 import "./StockInPage.css";
 import { apiFetch } from "../../services/api";
+import { Pagination } from "../../components/ui";
 import type { Shipment, ShipmentStatus } from "../shipments/shipmentTypes";
+
+const ITEMS_PER_PAGE = 20;
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   PENDING: "Pending",
@@ -23,6 +26,7 @@ export default function StockInPage() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +52,11 @@ export default function StockInPage() {
 
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredShipments.length / ITEMS_PER_PAGE));
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedShipments = filteredShipments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const getStatusClass = (status: string) => {
     switch (status) {
@@ -93,12 +102,18 @@ export default function StockInPage() {
               type="text"
               placeholder="Search shipment ID, shipment name or vendor..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
 
           <div className="stockin-filter">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select value={statusFilter} onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}>
               <option value="All">All Status</option>
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
@@ -135,7 +150,7 @@ export default function StockInPage() {
                 </td>
               </tr>
             ) : filteredShipments.length > 0 ? (
-              filteredShipments.map((shipment) => (
+              paginatedShipments.map((shipment) => (
                 <tr key={shipment.id}>
                   <td className="shipment-id">{shipment.shipmentId}</td>
                   <td>{shipment.shipmentName}</td>
@@ -151,7 +166,11 @@ export default function StockInPage() {
                   <td>{formatDateDMY(shipment.shipmentReceivedDate)}</td>
                   <td>
                     <div className="stockin-actions">
-                      <button className="action-btn view-btn">
+                      <button
+                        className="action-btn view-btn"
+                        title="View inventory"
+                        onClick={() => navigate(`/stock-in/${shipment.id}/inventory`)}
+                      >
                         <Eye size={15} />
                       </button>
                       <button
@@ -175,10 +194,13 @@ export default function StockInPage() {
         </table>
 
         <div className="stockin-footer">
-          <span>Showing {filteredShipments.length} shipments</span>
-          <div className="pagination">
-            <button className="active-page">1</button>
-          </div>
+          <span>
+            Showing {filteredShipments.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredShipments.length)} of{" "}
+            {filteredShipments.length} shipments
+            {filteredShipments.length !== shipments.length ? ` (${shipments.length} total)` : ""}
+          </span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setCurrentPage} />
         </div>
 
       </div>

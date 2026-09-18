@@ -13,6 +13,9 @@ import "./StockOutPage.css";
 import type { StockOutApiTransaction } from "./stockOutTypes";
 import { displayItemStatus } from "./stockOutTypes";
 import { apiFetch } from "../../services/api";
+import { Pagination, ListNumberBadge } from "../../components/ui";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function StockOutPage() {
   const navigate = useNavigate();
@@ -22,6 +25,7 @@ export default function StockOutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedTransaction, setSelectedTransaction] =
     useState<StockOutApiTransaction | null>(null);
 
@@ -64,6 +68,11 @@ export default function StockOutPage() {
       t.invoiceNumber.toLowerCase().includes(s)
     );
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginated = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const buildSpecsString = (item: StockOutApiTransaction["items"][number]) => {
     const parts = [
@@ -126,7 +135,10 @@ export default function StockOutPage() {
               type="text"
               placeholder="Search by customer name or invoice number..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
         </div>
@@ -164,7 +176,7 @@ export default function StockOutPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((t) => (
+              paginated.map((t) => (
                 <tr key={t.invoiceNumber}>
                   <td>
                     <span className="so-invoice-pill">{t.invoiceNumber}</span>
@@ -205,13 +217,11 @@ export default function StockOutPage() {
 
         <div className="so-table-footer">
           <span>
-            Showing {filtered.length} of {transactions.length} transactions
+            Showing {filtered.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filtered.length)} of {filtered.length} transactions
+            {filtered.length !== transactions.length ? ` (${transactions.length} total)` : ""}
           </span>
-          <div className="so-pagination">
-            <button>{"<"}</button>
-            <button className="so-active-page">1</button>
-            <button>{">"}</button>
-          </div>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setCurrentPage} />
         </div>
       </div>
 
@@ -295,6 +305,9 @@ export default function StockOutPage() {
                   {selectedTransaction.items.map((item) => (
                     <div key={item.assetId} className="so-drawer-item-row">
                       <div className="so-drawer-item-left">
+                        <div>
+                          <ListNumberBadge value={item.listNumber} />
+                        </div>
                         <span className="so-drawer-asset-id">{item.assetId}</span>
                         <p>
                           {item.brand} {item.model}
@@ -303,7 +316,7 @@ export default function StockOutPage() {
                           {buildSpecsString(item)}
                         </span>
                         <span className="so-drawer-traceability">
-                          List: {item.listNumber || "—"} · Batch: {item.batchId || "—"}
+                          Batch: {item.batchId || "—"}
                         </span>
                       </div>
                       <div className="so-drawer-item-right">

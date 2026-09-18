@@ -229,27 +229,6 @@
   color: var(--color-text-muted);
 }
 
-.so-pagination {
-  display: flex;
-  gap: 6px;
-}
-
-.so-pagination button {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border);
-  background: var(--color-white);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.so-active-page {
-  background: var(--color-primary) !important;
-  color: var(--color-white);
-  border-color: var(--color-primary) !important;
-}
-
 /* ── Transaction detail drawer ────────────────────────────────────────────── */
 
 .so-drawer-overlay {

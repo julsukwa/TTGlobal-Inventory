@@ -28,6 +28,23 @@
   --color-issued-bg: #e0e7ff;
   --color-issued-text: #3730a3;
 
+  /* Slate / accent shades shared by data tables and detail drawers */
+  --color-primary-soft: #eff6ff;
+  --color-primary-soft-border: #dbeafe;
+  --color-border-slate: #e2e8f0;
+  --color-surface-muted: #f1f5f9;
+  --color-text-slate: #475569;
+  --color-text-ghost: #cbd5e1;
+  --color-success: #16a34a;
+  --color-purple: #9333ea;
+  --color-purple-bg: #f3e8ff;
+  --color-purple-text: #7e22ce;
+
+  /* Overlays and elevation */
+  --color-overlay: rgba(15, 23, 42, 0.4);
+  --shadow-drawer: -8px 0 28px rgba(15, 23, 42, 0.12);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.1);
+
   /* Typography */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-size-xs: 11px;

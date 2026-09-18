@@ -19,6 +19,7 @@ export type AdjustmentStatus = "Ok" | "Faulty";
 // Exactly what GET/POST /adjustments return — see backend/src/adjustments.
 export interface BackendAdjustmentRecord {
   id: number;
+  listNumber: string;
   assetId: string;
   itemName: string;
   category: string;
@@ -35,6 +36,7 @@ export interface BackendAdjustmentRecord {
 
 export interface AdjustmentRecord {
   id: number;
+  listNumber: string;
   assetId: string;
   itemName: string;
   category: string;
@@ -52,6 +54,7 @@ export interface AdjustmentRecord {
 export function toAdjustmentRecord(raw: BackendAdjustmentRecord): AdjustmentRecord {
   return {
     id: raw.id,
+    listNumber: raw.listNumber,
     assetId: raw.assetId,
     itemName: raw.itemName,
     category: raw.category,

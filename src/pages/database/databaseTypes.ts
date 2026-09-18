@@ -26,8 +26,10 @@ export interface InventoryAsset {
   listNumber: string;
   batchId: string;
   shipmentId: string;
+  shipmentName: string;
   vendorId: string;
   category: string;
+  condition: string;
   brand: string;
   model: string;
   processor: string;
@@ -104,8 +106,10 @@ export function toInventoryAsset(raw: BackendInventoryItem): InventoryAsset {
     listNumber: raw.listNumber,
     batchId: raw.batch.batchId,
     shipmentId: raw.shipment.shipmentId,
+    shipmentName: raw.shipment.shipmentName,
     vendorId: raw.shipment.vendor.vendorId,
     category: raw.category,
+    condition: raw.condition,
     brand: raw.brand,
     model: raw.model,
     processor: raw.processor,

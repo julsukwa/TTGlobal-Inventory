@@ -18,9 +18,9 @@ import { toAdjustmentRecord } from "./adjustmentTypes";
 import type { AdjustmentRecord, BackendAdjustmentRecord } from "./adjustmentTypes";
 import { apiFetch, apiFetchBlob } from "../../services/api";
 
-import { StatusBadge, SearchBar, Pagination, Button } from "../../components/ui";
+import { StatusBadge, SearchBar, Pagination, Button, ListNumberBadge } from "../../components/ui";
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 20;
 
 export default function AdjustmentsPage() {
   const navigate = useNavigate();
@@ -269,6 +269,7 @@ export default function AdjustmentsPage() {
           <table className="adj-table">
             <thead>
               <tr>
+                <th>List Number</th>
                 <th>Date &amp; Time</th>
                 <th>Asset ID</th>
                 <th>Item Name</th>
@@ -282,25 +283,28 @@ export default function AdjustmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="adj-empty-row">
+                  <td colSpan={9} className="adj-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={8} className="adj-empty-row">
+                  <td colSpan={9} className="adj-empty-row">
                     Failed to load adjustments: {error}
                   </td>
                 </tr>
               ) : paginatedAdjustments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="adj-empty-row">
+                  <td colSpan={9} className="adj-empty-row">
                     No adjustments found.
                   </td>
                 </tr>
               ) : (
                 paginatedAdjustments.map((record) => (
                   <tr key={record.id}>
+                    <td>
+                      <ListNumberBadge value={record.listNumber} />
+                    </td>
                     <td className="adj-muted-cell">{record.date}</td>
                     <td className="adj-asset-id">{record.assetId}</td>
                     <td className="adj-item-name">{record.itemName}</td>

@@ -19,7 +19,7 @@ import * as XLSX from "xlsx";
 import "./ViewImportedInventoryPage.css";
 import { apiFetch } from "../../services/api";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
-import { StickerPrintPreview } from "../../components/ui";
+import { StickerPrintPreview, Pagination, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
 import type { Shipment } from "../shipments/shipmentTypes";
 import type {
@@ -27,6 +27,8 @@ import type {
   ImportedInventoryItem,
   InventoryItemStatus,
 } from "./ImportedInventoryTypes";
+
+const ITEMS_PER_PAGE = 20;
 
 type StatusFilter = "all" | InventoryItemStatus;
 
@@ -140,6 +142,7 @@ export default function ViewImportedInventoryPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<ImportedInventoryItem | null>(null);
 
   const { printStickers, showPrintPreview, printSingle, closePrint } = useStickerPrint();
@@ -229,6 +232,10 @@ export default function ViewImportedInventoryPage() {
     () => items.filter((item) => conditionFilter === "all" || item.condition === conditionFilter),
     [items, conditionFilter]
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedItems = filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const okCount = allItems.filter((i) => i.status === "OK").length;
   const faultyCount = allItems.filter((i) => i.status === "FAULTY").length;
@@ -400,13 +407,19 @@ export default function ViewImportedInventoryPage() {
               type="text"
               placeholder="Search by Asset ID, Model, or Brand..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
 
           <div className="vii-filter">
             <Filter size={14} />
-            <select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)}>
+            <select value={conditionFilter} onChange={(e) => {
+                setConditionFilter(e.target.value);
+                setCurrentPage(1);
+              }}>
               <option value="all">All Conditions</option>
               {conditions.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -415,7 +428,10 @@ export default function ViewImportedInventoryPage() {
           </div>
 
           <div className="vii-filter">
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <select value={categoryFilter} onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setCurrentPage(1);
+              }}>
               <option value="all">All Categories</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
@@ -426,7 +442,10 @@ export default function ViewImportedInventoryPage() {
           </div>
 
           <div className="vii-filter">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+            <select value={statusFilter} onChange={(e) => {
+                setStatusFilter(e.target.value as StatusFilter);
+                setCurrentPage(1);
+              }}>
               <option value="all">All Status</option>
               <option value="OK">Ok</option>
               <option value="FAULTY">Faulty</option>
@@ -439,6 +458,7 @@ export default function ViewImportedInventoryPage() {
           <table className="vii-table">
             <thead>
               <tr>
+                <th>List Number</th>
                 <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
@@ -460,27 +480,30 @@ export default function ViewImportedInventoryPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={16} className="vii-empty-row">
+                  <td colSpan={17} className="vii-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={16} className="vii-empty-row">
+                  <td colSpan={17} className="vii-empty-row">
                     Failed to load inventory: {error}
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="vii-empty-row">
+                  <td colSpan={17} className="vii-empty-row">
                     {allItems.length === 0
                       ? "No inventory has been imported into this shipment yet."
                       : "No items match your search/filter."}
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => (
+                paginatedItems.map((item) => (
                   <tr key={item.id}>
+                    <td>
+                      <ListNumberBadge value={item.listNumber} />
+                    </td>
                     <td className="vii-asset-id">{item.assetId}</td>
                     <td>
                       <span className="batch-pill">{item.batchId}</span>
@@ -555,8 +578,16 @@ export default function ViewImportedInventoryPage() {
 
         <div className="vii-table-footer">
           <span>
-            Showing {filteredItems.length} of {allItems.length} items
+            Showing {filteredItems.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredItems.length)} of{" "}
+            {filteredItems.length} items
+            {filteredItems.length !== allItems.length ? ` (${allItems.length} in shipment)` : ""}
           </span>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </div>
       </div>
 

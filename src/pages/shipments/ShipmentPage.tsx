@@ -8,6 +8,7 @@
 
 import "./ShipmentPage.css";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { Shipment, ShipmentStatus } from "./shipmentTypes";
 
@@ -20,6 +21,9 @@ import {
 } from "lucide-react";
 
 import { apiFetch } from "../../services/api";
+import { Pagination } from "../../components/ui";
+
+const ITEMS_PER_PAGE = 20;
 
 interface Vendor {
   id: number;
@@ -65,6 +69,7 @@ function toIsoDate(dateInputValue: string) {
 }
 
 function ShipmentPage() {
+  const navigate = useNavigate();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +78,7 @@ function ShipmentPage() {
   const [deleting, setDeleting] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"All" | ShipmentStatus>("All");
 
   const [showModal, setShowModal] = useState(false);
@@ -204,6 +210,12 @@ function ShipmentPage() {
     (shipment) => statusFilter === "All" || shipment.status === statusFilter
   );
 
+  // Clamped: deleting the last shipment on a page shrinks the list under it.
+  const totalPages = Math.max(1, Math.ceil(filteredShipments.length / ITEMS_PER_PAGE));
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedShipments = filteredShipments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
   const handleEditShipment = (shipment: Shipment) => {
     setEditingShipment(shipment);
     setShipmentId(shipment.shipmentId);
@@ -274,13 +286,19 @@ function ShipmentPage() {
               type="text"
               placeholder="Search shipment ID or shipment name..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div className="shipment-filter">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "All" | ShipmentStatus)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as "All" | ShipmentStatus);
+                setCurrentPage(1);
+              }}
             >
               <option value="All">All Status</option>
               <option value="PENDING">Pending</option>
@@ -326,7 +344,7 @@ function ShipmentPage() {
                 </td>
               </tr>
             ) : (
-              filteredShipments.map((shipment) => {
+              paginatedShipments.map((shipment) => {
                 const remaining = shipment.itemsReceived - shipment.issuedCount;
                 return (
                   <tr key={shipment.id}>
@@ -354,7 +372,11 @@ function ShipmentPage() {
                     <td>{formatDateDMY(shipment.shipmentReceivedDate)}</td>
                     <td>
                       <div className="shipment-actions">
-                        <button className="action-btn view-btn">
+                        <button
+                          className="action-btn view-btn"
+                          title="View inventory"
+                          onClick={() => navigate(`/stock-in/${shipment.id}/inventory`)}
+                        >
                           <Eye size={15} />
                         </button>
                         <button
@@ -381,13 +403,12 @@ function ShipmentPage() {
         {/* Footer */}
         <div className="shipment-footer">
           <span>
-            Showing {filteredShipments.length} of {shipments.length} shipments
+            Showing {filteredShipments.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredShipments.length)} of{" "}
+            {filteredShipments.length} shipments
+            {filteredShipments.length !== shipments.length ? ` (${shipments.length} total)` : ""}
           </span>
-          <div className="pagination">
-            <button>{"<"}</button>
-            <button className="active-page">1</button>
-            <button>{">"}</button>
-          </div>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setCurrentPage} />
         </div>
       </div>
 

@@ -7,10 +7,12 @@ import { apiFetch } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { canEdit } from "../../utils/permissions";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
-import { StickerPrintPreview } from "../../components/ui";
+import { StickerPrintPreview, Pagination, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
 import type { Shipment } from "../shipments/shipmentTypes";
 import type { StickerQueueItem, StickerStatus } from "./stickerQueueTypes";
+
+const ITEMS_PER_PAGE = 20;
 
 type StatusFilter = "all" | StickerStatus;
 
@@ -55,6 +57,7 @@ export default function StickerQueuePage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -92,11 +95,23 @@ export default function StickerQueuePage() {
     [entries, statusFilter]
   );
 
-  const selectableIds = useMemo(() => filteredEntries.map((e) => e.id), [filteredEntries]);
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / ITEMS_PER_PAGE));
+  // Clamped: printing can shrink the list while a later page is open.
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // The header checkbox selects the rows on the current page; selections made
+  // on other pages are kept.
+  const selectableIds = useMemo(() => paginatedEntries.map((e) => e.id), [paginatedEntries]);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 
   const toggleSelectAll = () => {
-    setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      selectableIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
   };
 
   const toggleSelectOne = (id: number) => {
@@ -236,7 +251,10 @@ export default function StickerQueuePage() {
         <div className="sq-toolbar">
           <div className="sq-filter">
             <Filter size={14} />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+            <select value={statusFilter} onChange={(e) => {
+                setStatusFilter(e.target.value as StatusFilter);
+                setCurrentPage(1);
+              }}>
               <option value="all">All Status</option>
               <option value="PENDING">Pending</option>
               <option value="PRINTED">Printed</option>
@@ -281,8 +299,8 @@ export default function StickerQueuePage() {
                     />
                   </th>
                 )}
-                <th>Asset ID</th>
                 <th>List Number</th>
+                <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
                 <th>Brand</th>
@@ -315,7 +333,7 @@ export default function StickerQueuePage() {
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map((entry) => (
+                paginatedEntries.map((entry) => (
                   <tr key={entry.id}>
                     {!isReadOnly && (
                       <td className="sq-checkbox-col">
@@ -326,8 +344,10 @@ export default function StickerQueuePage() {
                         />
                       </td>
                     )}
+                    <td>
+                      <ListNumberBadge value={entry.listNumber} />
+                    </td>
                     <td className="sq-asset-id">{entry.assetId}</td>
-                    <td>{entry.listNumber}</td>
                     <td>
                       <span className="sq-batch-pill">{entry.batchId}</span>
                     </td>
@@ -365,8 +385,12 @@ export default function StickerQueuePage() {
 
         <div className="sq-table-footer">
           <span>
-            Showing {filteredEntries.length} of {entries.length} entries
+            Showing {filteredEntries.length === 0 ? 0 : startIndex + 1}–
+            {Math.min(startIndex + ITEMS_PER_PAGE, filteredEntries.length)} of{" "}
+            {filteredEntries.length} entries
+            {filteredEntries.length !== entries.length ? ` (${entries.length} total)` : ""}
           </span>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setCurrentPage} />
         </div>
       </div>
 
