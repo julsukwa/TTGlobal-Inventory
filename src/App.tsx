@@ -18,6 +18,7 @@ import ManualStockInPage from "./pages/stock-in/ManualStockInPage";
 import ImportCsvPage from "./pages/stock-in/ImportCsvPage";
 import ImportCsvPreviewPage from "./pages/stock-in/ImportCsvPreviewPage";
 import ViewImportedInventoryPage from "./pages/stock-in/ViewImportedInventoryPage";
+import StickerQueuePage from "./pages/stock-in/StickerQueuePage";
 import StockInCompletePage from "./pages/stock-in/StockInCompletePage";
 
 // Stock Out flow
@@ -54,6 +55,7 @@ function App() {
           <Route path="/stock-in/:shipmentId/importcsv"         element={<ImportCsvPage />} />
           <Route path="/stock-in/:shipmentId/importcsv/preview" element={<ImportCsvPreviewPage />} />
           <Route path="/stock-in/:shipmentId/inventory"         element={<ViewImportedInventoryPage />} />
+          <Route path="/stock-in/:shipmentId/sticker-queue"     element={<StickerQueuePage />} />
           <Route path="/stock-in/:shipmentId/complete"          element={<StockInCompletePage />} />
 
           {/* Stock-Out flow */}

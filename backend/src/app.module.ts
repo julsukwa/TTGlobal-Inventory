@@ -11,6 +11,7 @@ import { InventoryModule } from './inventory/inventory.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ShipmentsModule } from './shipments/shipments.module.js';
 import { StaffModule } from './staff/staff.module.js';
+import { StickerQueueModule } from './sticker-queue/sticker-queue.module.js';
 import { StockInModule } from './stock-in/stock-in.module.js';
 import { StockOutModule } from './stock-out/stock-out.module.js';
 import { VendorsModule } from './vendors/vendors.module.js';
@@ -38,6 +39,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     StaffModule,
     StockInModule,
     StockOutModule,
+    StickerQueueModule,
   ],
   controllers: [AppController],
   providers: [AppService],

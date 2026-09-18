@@ -29,9 +29,8 @@ interface Reconciliation {
   percentageReceived: number;
 }
 
-interface StockInBatch {
-  id: number;
-  batchId: string;
+interface StickerQueueCount {
+  count: number;
 }
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -59,7 +58,7 @@ function ImportInventoryPage() {
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
-  const [batches, setBatches] = useState<StockInBatch[]>([]);
+  const [pendingStickerCount, setPendingStickerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,12 +71,12 @@ function ImportInventoryPage() {
     Promise.all([
       apiFetch<Shipment>(`/shipments/${shipmentId}`),
       apiFetch<Reconciliation>(`/shipments/${shipmentId}/reconciliation`),
-      apiFetch<StockInBatch[]>(`/stock-in/batches/${shipmentId}`),
+      apiFetch<StickerQueueCount>(`/sticker-queue/shipment/${shipmentId}/count`),
     ])
-      .then(([shipmentData, reconciliationData, batchesData]) => {
+      .then(([shipmentData, reconciliationData, stickerCountData]) => {
         setShipment(shipmentData);
         setReconciliation(reconciliationData);
-        setBatches(batchesData);
+        setPendingStickerCount(stickerCountData.count);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -258,12 +257,14 @@ function ImportInventoryPage() {
           </div>
           <h3>
             Sticker Queue
-            {batches.length > 0 && (
-              <span className="sticker-count-badge">{batches.length}</span>
+            {pendingStickerCount > 0 && (
+              <span className="sticker-count-badge">{pendingStickerCount}</span>
             )}
           </h3>
           <p>View and print stickers for inventory items in this shipment.</p>
-          <button>Go to Sticker Queue</button>
+          <button onClick={() => navigate(`/stock-in/${shipment.id}/sticker-queue`)}>
+            Go to Sticker Queue
+          </button>
         </div>
 
       </div>
