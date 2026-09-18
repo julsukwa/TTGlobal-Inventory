@@ -32,6 +32,13 @@ interface DropdownValueApi {
   createdAt: string;
 }
 
+// GET /inventory/:assetId's response, narrowed to the one extra field (over
+// BackendInventoryItem) this page needs: the adjustment history, newest
+// first, so its [0] is the adjustment currently driving this item's fault.
+interface InventoryDetailWithAdjustments extends BackendInventoryItem {
+  adjustments: { id: number }[];
+}
+
 const ITEMS_PER_PAGE = 10;
 
 function buildSpecs(item: FaultyStockItem): string {
@@ -57,10 +64,8 @@ export default function FaultyStockPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fault type options — live from the Dropdowns module. The Edit Fault
-  // checklist below shows these with the item's existing types pre-checked,
-  // but disabled: see handleSaveEditFault for why fault types can't actually
-  // be changed here yet. (Named apart from the `faultOptions` filter-dropdown
+  // Fault type options — live from the Dropdowns module, offered as the Edit
+  // Fault checklist. (Named apart from the `faultOptions` filter-dropdown
   // list further down, which is derived from the faulty items themselves.)
   const [activeFaultTypes, setActiveFaultTypes] = useState<string[]>([]);
 
@@ -201,24 +206,42 @@ export default function FaultyStockPage() {
     setEditError("");
   };
 
-  // POST /adjustments only accepts OK → FAULTY transitions, so it rejects an
-  // item that's already FAULTY — it can't be reused to edit an existing
-  // adjustment's fault types. Absent that, this only persists the notes
-  // field via PATCH /inventory/:assetId.
-  // TODO: needs a PATCH /adjustments/:id endpoint for updating fault types
-  // on an existing adjustment — wire the checklist up to that once it exists.
+  const toggleEditFault = (fault: string) => {
+    setEditFaultTypes((prev) =>
+      prev.includes(fault) ? prev.filter((f) => f !== fault) : [...prev, fault]
+    );
+    setEditError("");
+  };
+
+  // The adjustment being edited isn't known to this page directly — only the
+  // inventory item is — so this looks it up via GET /inventory/:assetId
+  // first (its `adjustments` array is ordered newest-first) before calling
+  // PATCH /adjustments/:id with the edited fault types and notes.
   const handleSaveEditFault = async () => {
     if (!editTarget) return;
+    if (editFaultTypes.length === 0) {
+      setEditError("Select at least one fault type.");
+      return;
+    }
+
     setSavingEditFault(true);
     setEditError("");
 
     try {
-      await apiFetch(`/inventory/${encodeURIComponent(editTarget.assetId)}`, {
+      const detail = await apiFetch<InventoryDetailWithAdjustments>(
+        `/inventory/${encodeURIComponent(editTarget.assetId)}`
+      );
+      const latestAdjustment = detail.adjustments[0];
+      if (!latestAdjustment) {
+        throw new Error("No adjustment record found for this item.");
+      }
+
+      await apiFetch(`/adjustments/${latestAdjustment.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ notes: editNotes }),
+        body: JSON.stringify({ faultTypes: editFaultTypes, notes: editNotes }),
       });
 
-      const updated: FaultyStockItem = { ...editTarget, notes: editNotes };
+      const updated: FaultyStockItem = { ...editTarget, faultTypes: editFaultTypes, notes: editNotes };
       setFaultyStock((prev) => prev.map((i) => (i.assetId === updated.assetId ? updated : i)));
 
       if (selectedItem?.assetId === updated.assetId) {
@@ -227,7 +250,7 @@ export default function FaultyStockPage() {
 
       handleCloseEditFault();
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Failed to save notes.");
+      setEditError(err instanceof Error ? err.message : "Failed to save changes.");
     } finally {
       setSavingEditFault(false);
     }
@@ -705,14 +728,16 @@ export default function FaultyStockPage() {
               <div className="fs-fault-checklist">
                 {activeFaultTypes.map((fault) => (
                   <label key={fault} className="fs-fault-checkbox">
-                    <input type="checkbox" checked={editFaultTypes.includes(fault)} disabled />
+                    <input
+                      type="checkbox"
+                      checked={editFaultTypes.includes(fault)}
+                      onChange={() => toggleEditFault(fault)}
+                    />
                     {fault}
                   </label>
                 ))}
               </div>
-              <span className="field-error">
-                Fault types cannot be changed after marking. Contact an administrator.
-              </span>
+              {editError && <span className="field-error">{editError}</span>}
             </div>
 
             <div className="fs-field">
@@ -723,7 +748,6 @@ export default function FaultyStockPage() {
                 onChange={(e) => setEditNotes(e.target.value)}
                 placeholder="Any additional detail about the fault..."
               />
-              {editError && <span className="field-error">{editError}</span>}
             </div>
 
             <div className="modal-actions">

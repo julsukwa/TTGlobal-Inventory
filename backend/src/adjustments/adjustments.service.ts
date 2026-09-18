@@ -7,6 +7,7 @@ import {
 import { ItemStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AdjustmentItemDto, CreateAdjustmentDto } from './dto/create-adjustment.dto.js';
+import { UpdateAdjustmentDto } from './dto/update-adjustment.dto.js';
 
 export interface AdjustmentFilters {
   search?: string;
@@ -110,14 +111,7 @@ export class AdjustmentsService {
     const assetIds = uniqueItems.map((item) => item.assetId);
 
     const requestedFaultTypes = [...new Set(uniqueItems.flatMap((item) => item.faultTypes))];
-    const validFaultTypes = await this.prisma.dropdownValue.findMany({
-      where: { category: 'Fault', value: { in: requestedFaultTypes }, isActive: true },
-    });
-    const validFaultTypeSet = new Set(validFaultTypes.map((f) => f.value));
-    const invalidFaultTypes = requestedFaultTypes.filter((f) => !validFaultTypeSet.has(f));
-    if (invalidFaultTypes.length > 0) {
-      throw new BadRequestException(`Invalid fault type(s): ${invalidFaultTypes.join(', ')}`);
-    }
+    await this.assertValidFaultTypes(requestedFaultTypes);
 
     const inventoryItems = await this.prisma.inventoryItem.findMany({
       where: { assetId: { in: assetIds } },
@@ -192,6 +186,35 @@ export class AdjustmentsService {
     };
   }
 
+  async update(id: number, dto: UpdateAdjustmentDto) {
+    const adjustment = await this.prisma.adjustment.findUnique({ where: { id } });
+    if (!adjustment) {
+      throw new NotFoundException(`Adjustment with id ${id} not found`);
+    }
+
+    if (dto.faultTypes !== undefined) {
+      if (!dto.faultTypes.length) {
+        throw new BadRequestException('faultTypes must contain at least one value');
+      }
+      await this.assertValidFaultTypes(dto.faultTypes);
+    }
+
+    // InventoryItem has no faultTypes column of its own — GET /inventory
+    // derives it from this same item's latest Adjustment record (see
+    // InventoryService.attachFaultTypes), so updating the Adjustment here is
+    // all that's needed to keep it in sync; there's nothing else to write.
+    const updated = await this.prisma.adjustment.update({
+      where: { id },
+      data: {
+        ...(dto.faultTypes !== undefined ? { faultTypes: dto.faultTypes } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+      },
+      include: adjustmentInclude,
+    });
+
+    return this.toAdjustmentShape(updated);
+  }
+
   async exportCsv() {
     const adjustments = await this.prisma.adjustment.findMany({
       include: adjustmentInclude,
@@ -218,6 +241,17 @@ export class AdjustmentsService {
     ]);
 
     return [header, ...rows].map((row) => row.map(escapeCsvField).join(',')).join('\n');
+  }
+
+  private async assertValidFaultTypes(faultTypes: string[]) {
+    const validFaultTypes = await this.prisma.dropdownValue.findMany({
+      where: { category: 'Fault', value: { in: faultTypes }, isActive: true },
+    });
+    const validFaultTypeSet = new Set(validFaultTypes.map((f) => f.value));
+    const invalidFaultTypes = faultTypes.filter((f) => !validFaultTypeSet.has(f));
+    if (invalidFaultTypes.length > 0) {
+      throw new BadRequestException(`Invalid fault type(s): ${invalidFaultTypes.join(', ')}`);
+    }
   }
 
   private toAdjustmentShape(adjustment: AdjustmentWithRelations) {

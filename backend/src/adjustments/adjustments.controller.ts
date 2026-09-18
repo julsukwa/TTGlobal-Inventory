@@ -3,6 +3,9 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -13,6 +16,7 @@ import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { AdjustmentsService } from './adjustments.service.js';
 import { CreateAdjustmentDto } from './dto/create-adjustment.dto.js';
+import { UpdateAdjustmentDto } from './dto/update-adjustment.dto.js';
 
 interface AuthenticatedRequest extends Request {
   user: { id: number; username: string; role: string };
@@ -51,6 +55,16 @@ export class AdjustmentsController {
   create(@Req() req: AuthenticatedRequest, @Body() dto: CreateAdjustmentDto) {
     this.assertAdminOrWarehouse(req);
     return this.adjustmentsService.create(dto, req.user.id);
+  }
+
+  @Patch(':id')
+  update(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAdjustmentDto,
+  ) {
+    this.assertAdminOrWarehouse(req);
+    return this.adjustmentsService.update(id, dto);
   }
 
   private assertAdminOrWarehouse(req: AuthenticatedRequest) {
