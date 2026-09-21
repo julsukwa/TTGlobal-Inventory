@@ -55,7 +55,7 @@ export function AssetSticker({
       </div>
 
       <div className="asset-sticker-qr">
-        <QRCodeSVG value={assetId} size={200} />
+        <QRCodeSVG value={assetId} size={200} fgColor="#000000" bgColor="#ffffff" />
       </div>
     </div>
   );

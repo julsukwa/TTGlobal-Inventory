@@ -7,6 +7,7 @@
 // page — see that file for the print-specific layout.
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Printer, X } from "lucide-react";
 import { AssetSticker } from "./AssetSticker";
 import type { AssetStickerProps } from "./AssetSticker";
@@ -26,14 +27,25 @@ export function StickerPrintPreview({ stickers, onClose }: StickerPrintPreviewPr
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  return (
+  useEffect(() => {
+    document.body.setAttribute("data-printing-stickers", "true");
+    return () => document.body.removeAttribute("data-printing-stickers");
+  }, []);
+
+  const handlePrint = () => {
+    setTimeout(() => {
+      window.print();
+    }, 250);
+  };
+
+  return createPortal(
     <div className="stk-print-root">
       <div className="stk-print-toolbar">
         <span>
           {stickers.length} sticker{stickers.length !== 1 ? "s" : ""} ready to print
         </span>
         <div className="stk-print-toolbar-actions">
-          <button className="stk-print-btn-primary" onClick={() => window.print()}>
+          <button className="stk-print-btn-primary" onClick={handlePrint}>
             <Printer size={14} />
             Print
           </button>
@@ -51,6 +63,7 @@ export function StickerPrintPreview({ stickers, onClose }: StickerPrintPreviewPr
           </div>
         ))}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

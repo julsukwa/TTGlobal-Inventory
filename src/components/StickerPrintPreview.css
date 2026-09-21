@@ -79,23 +79,36 @@
   justify-content: center;
 }
 
-/* ─── Print ──────────────────────────────────────────────────────────────── */
+/* ─── Print (Zebra GK420d, 50mm x 25mm labels) ───────────────────────────── */
+
+/* @page applies to all browser print jobs. Staff should only print via the Print Sticker button.
+   Printing other pages directly from the browser will use this 50x25mm size. */
+@page {
+  size: 50mm 25mm;
+  margin: 0mm;
+}
 
 @media print {
-  body * {
-    visibility: hidden;
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
-  .stk-print-root,
-  .stk-print-root * {
-    visibility: visible;
+  /* Hide everything except the sticker overlay (portaled to <body>) */
+  body > *:not(.stk-print-root) {
+    display: none !important;
   }
 
   .stk-print-root {
-    position: absolute;
-    inset: 0;
-    overflow: visible;
-    background: var(--color-white);
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    background: none !important;
   }
 
   .stk-print-toolbar {
@@ -103,23 +116,25 @@
   }
 
   .stk-print-grid {
-    display: block;
-    overflow: visible;
-    padding: 0;
-    gap: 0;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    background: none !important;
   }
 
+  /* Each sticker gets its own page */
   .stk-print-page {
-    display: block;
     page-break-after: always;
+    break-after: page;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .stk-print-page:last-child {
-    page-break-after: auto;
-  }
-
-  @page {
-    size: 50mm 25mm;
-    margin: 0;
+    page-break-after: avoid;
+    break-after: avoid;
   }
 }

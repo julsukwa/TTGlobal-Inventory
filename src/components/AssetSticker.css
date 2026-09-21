@@ -97,3 +97,27 @@
   width: 100%;
   height: 100%;
 }
+
+@media print {
+  .asset-sticker {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    border: none !important;
+  }
+
+  .asset-sticker * {
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .asset-sticker-asset-id {
+    color: #000000 !important;
+  }
+
+  .asset-sticker-batch {
+    color: #000000 !important;
+  }
+}
