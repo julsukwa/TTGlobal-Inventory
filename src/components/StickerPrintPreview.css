@@ -82,19 +82,30 @@
 /* ─── Print (Zebra GK420d, 50mm x 25mm labels) ───────────────────────────── */
 
 /* @page applies to all browser print jobs. Staff should only print via the Print Sticker button.
-   Printing other pages directly from the browser will use this 50x25mm size. */
+   Printing other pages directly from the browser will use this 50x25mm size.
+
+   Orientation comes from the explicit dimensions (50mm wide x 25mm tall) — adding a
+   `portrait`/`landscape` keyword after two lengths is invalid CSS and makes the browser
+   drop the whole size declaration.
+
+   Safari print dialog requirements (page margins/headers can't be controlled from CSS there):
+   - Uncheck "Print headers and footers" (otherwise Safari adds them and pushes content onto extra pages)
+   - Set Paper Size to the Zebra label size (2 x 1 in / 50 x 25 mm)
+   - Set Orientation to the option whose icon shows the label wider than tall
+   - Set Scale to 100% */
 @page {
   size: 50mm 25mm;
-  margin: 0mm;
+  margin: 0;
 }
 
 @media print {
   html,
   body {
+    width: 50mm !important;
+    height: 25mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    height: auto !important;
     overflow: visible !important;
   }
 
@@ -124,17 +135,26 @@
     background: none !important;
   }
 
-  /* Each sticker gets its own page */
+  /* Each sticker gets its own page. Safari inserts a spurious blank page when
+     page-break-after is set on every item (including the last), so instead
+     force a break only *before* each sticker except the first and let @page
+     handle the final page — Safari handles page-break-before more reliably. */
   .stk-print-page {
-    page-break-after: always;
-    break-after: page;
-    display: block !important;
+    width: 50mm !important;
+    height: 25mm !important;
+    max-height: 25mm !important;
+    overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
-  .stk-print-page:last-child {
-    page-break-after: avoid;
-    break-after: avoid;
+  .stk-print-page + .stk-print-page {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 }

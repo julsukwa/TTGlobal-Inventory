@@ -59,7 +59,9 @@ export function StickerPrintPreview({ stickers, onClose }: StickerPrintPreviewPr
       <div className="stk-print-grid">
         {stickers.map((sticker, index) => (
           <div className="stk-print-page" key={`${sticker.assetId}-${index}`}>
-            <AssetSticker {...sticker} />
+            <div style={{ width: "50mm", height: "25mm", overflow: "hidden" }}>
+              <AssetSticker {...sticker} />
+            </div>
           </div>
         ))}
       </div>

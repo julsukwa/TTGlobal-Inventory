@@ -1,22 +1,30 @@
 .asset-sticker {
+  position: relative;
   box-sizing: border-box;
+  /* px fallback (50mm x 25mm at 96dpi), overridden by the exact mm values below */
+  width: 189px;
+  height: 94px;
   width: 50mm;
+  max-width: 50mm;
   height: 25mm;
-  padding: 1mm;
+  max-height: 25mm;
+  margin: 0;
+  padding: 0;
   background: var(--color-white);
   border: 0.5px solid #ccc;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: space-between;
   overflow: hidden;
   page-break-inside: avoid;
+  break-inside: avoid;
 }
 
+/* Text area and QR are absolutely positioned so the QR can never overlap text,
+   whatever the content length. */
 .asset-sticker-info {
-  width: 29mm;
-  max-width: 29mm;
-  height: 100%;
+  position: absolute;
+  left: 1mm;
+  top: 1mm;
+  right: 16mm;
+  bottom: 1mm;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -34,16 +42,17 @@
   font-size: 7pt;
   font-weight: 700;
   line-height: 1.15;
-  color: #111111;
+  color: #000000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .asset-sticker-category {
-  font-size: 5.5pt;
+  font-size: 6pt;
+  font-weight: 500;
   line-height: 1.15;
-  color: var(--color-text-muted);
+  color: #000000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -52,9 +61,10 @@
 .asset-sticker-processor,
 .asset-sticker-specs,
 .asset-sticker-screen {
-  font-size: 5.5pt;
+  font-size: 6pt;
+  font-weight: 500;
   line-height: 1.15;
-  color: var(--color-text-body);
+  color: #000000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -68,7 +78,7 @@
 .asset-sticker-asset-id {
   font-family: "Courier New", Courier, monospace;
   font-size: 6.5pt;
-  font-weight: 600;
+  font-weight: 700;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -76,24 +86,26 @@
 }
 
 .asset-sticker-batch {
-  font-size: 4.5pt;
+  font-size: 5pt;
+  font-weight: 500;
   line-height: 1.2;
-  color: var(--color-text-faint);
+  color: #000000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .asset-sticker-qr {
-  width: 18mm;
-  height: 18mm;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute;
+  right: 1mm;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14mm;
+  height: 14mm;
 }
 
 .asset-sticker-qr svg {
+  display: block;
   width: 100%;
   height: 100%;
 }

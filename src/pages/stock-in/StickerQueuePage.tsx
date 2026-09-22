@@ -27,6 +27,7 @@ function toStickerProps(entry: StickerQueueItem): AssetStickerProps {
     generation: entry.generation,
     ram: entry.ram,
     storage: entry.storage,
+    speed: entry.speed,
     screenType: entry.screenType,
   };
 }

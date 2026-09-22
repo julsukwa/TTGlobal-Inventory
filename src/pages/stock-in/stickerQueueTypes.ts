@@ -12,6 +12,7 @@ export interface StickerQueueItem {
   generation?: string;
   ram: string;
   storage: string;
+  speed: string;
   screenType: string;
   status: StickerStatus;
   createdAt: string;

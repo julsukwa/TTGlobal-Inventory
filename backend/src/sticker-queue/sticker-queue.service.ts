@@ -83,6 +83,7 @@ export class StickerQueueService {
       generation: item.generation,
       ram: item.ram,
       storage: item.storage,
+      speed: item.speed,
       screenType: item.screenType,
       status: entry.status,
       createdAt: entry.createdAt,

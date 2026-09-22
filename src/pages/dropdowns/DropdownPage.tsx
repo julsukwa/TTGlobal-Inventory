@@ -3,11 +3,17 @@
 // Admin screen for managing the fixed value lists used throughout the system
 // (Item Type, Fault, Vendor, Brand, RAM, Storage, Processor, Condition,
 // Generation) — e.g. the category/condition options offered during Stock In.
-// Backed entirely by the real /dropdowns API: all values are fetched on
-// mount (for sidebar counts) and re-fetched per category on selection: add,
-// edit, and active/inactive toggling all call through to the backend, which
-// never hard-deletes a value. Each category is searched and paginated
-// independently; switching category or searching resets to page 1.
+// Backed by the real /dropdowns API for every category except Vendor: vendors
+// are a real entity with their own table (Shipment.vendorId is a foreign key
+// into it), not a free-text DropdownValue, so the Vendor tab reads/writes the
+// real /vendors API instead — see VENDOR_CATEGORY_ID branches below. This
+// keeps a single source of truth: a vendor added here is the same vendor the
+// shipment-creation dropdown sees immediately, since both read the same
+// table. All values are fetched on mount (for sidebar counts) and re-fetched
+// per category on selection: add, edit, and active/inactive toggling all
+// call through to the backend, which never hard-deletes a value. Each
+// category is searched and paginated independently; switching category or
+// searching resets to page 1.
 
 import "./DropdownPage.css";
 import { useEffect, useState } from "react";
@@ -32,10 +38,12 @@ import {
 import { apiFetch, ApiError } from "../../services/api";
 import { StatusBadge } from "../../components/ui";
 
+const VENDOR_CATEGORY_ID = "vendor";
+
 const DROPDOWN_CATEGORIES = [
   { id: "itemType", name: "Item Type" },
   { id: "fault", name: "Fault" },
-  { id: "vendor", name: "Vendor" },
+  { id: VENDOR_CATEGORY_ID, name: "Vendor" },
   { id: "brand", name: "Brand" },
   { id: "ram", name: "RAM" },
   { id: "storage", name: "Storage" },
@@ -45,11 +53,12 @@ const DROPDOWN_CATEGORIES = [
 ];
 
 // Maps this page's local category ids to the `category` string the backend
-// DropdownValue table stores (see backend/prisma/schema.prisma).
+// DropdownValue table stores (see backend/prisma/schema.prisma). Vendor is
+// deliberately absent — it's backed by the real Vendor table via /vendors,
+// not a DropdownValue category (see file header comment).
 const BACKEND_CATEGORY: Record<string, string> = {
   itemType: "ItemType",
   fault: "Fault",
-  vendor: "Vendor",
   brand: "Brand",
   ram: "RAM",
   storage: "Storage",
@@ -61,6 +70,7 @@ const BACKEND_CATEGORY: Record<string, string> = {
 interface DropdownValue {
   id: number;
   name: string;
+  code?: string; // vendor's short business code (e.g. "TTL") — vendor rows only
   dateAdded: string;
   isActive: boolean;
 }
@@ -73,6 +83,14 @@ interface BackendDropdownValue {
   createdAt: string;
 }
 
+interface BackendVendor {
+  id: number;
+  vendorId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 type DropdownData = {
   [key: string]: DropdownValue[];
 };
@@ -81,6 +99,16 @@ function toDisplayValue(row: BackendDropdownValue): DropdownValue {
   return {
     id: row.id,
     name: row.value,
+    dateAdded: new Date(row.createdAt).toLocaleDateString("en-GB"),
+    isActive: row.isActive,
+  };
+}
+
+function toVendorDisplayValue(row: BackendVendor): DropdownValue {
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.vendorId,
     dateAdded: new Date(row.createdAt).toLocaleDateString("en-GB"),
     isActive: row.isActive,
   };
@@ -107,6 +135,7 @@ function DropdownPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<DropdownValue | null>(null);
   const [valueName, setValueName] = useState("");
+  const [valueCode, setValueCode] = useState(""); // vendor's short code — vendor category only
   const [valueError, setValueError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [categoryLoading, setCategoryLoading] = useState(false);
@@ -115,12 +144,16 @@ function DropdownPage() {
   const [saving, setSaving] = useState(false);
 
   // Fetch every value once on mount so the sidebar can show a count per
-  // category without a request per tab.
+  // category without a request per tab. Vendor comes from a separate call
+  // since it's backed by /vendors, not /dropdowns (see file header comment).
   useEffect(() => {
     let cancelled = false;
 
-    apiFetch<BackendDropdownValue[]>("/dropdowns")
-      .then((rows) => {
+    Promise.all([
+      apiFetch<BackendDropdownValue[]>("/dropdowns"),
+      apiFetch<BackendVendor[]>("/vendors"),
+    ])
+      .then(([rows, vendors]) => {
         if (cancelled) return;
 
         const grouped: DropdownData = {};
@@ -129,6 +162,7 @@ function DropdownPage() {
             .filter((row) => row.category === backendCategory)
             .map(toDisplayValue);
         }
+        grouped[VENDOR_CATEGORY_ID] = vendors.map(toVendorDisplayValue);
 
         setDropdownData((prev) => ({ ...prev, ...grouped }));
       })
@@ -147,20 +181,25 @@ function DropdownPage() {
   // Re-fetch the selected category's values whenever it changes, so the
   // list is always fresh rather than relying solely on the mount-time fetch.
   useEffect(() => {
+    const isVendor = selectedCategory === VENDOR_CATEGORY_ID;
     const backendCategory = BACKEND_CATEGORY[selectedCategory];
-    if (!backendCategory) return;
+    if (!isVendor && !backendCategory) return;
 
     let cancelled = false;
     setCategoryLoading(true);
 
-    apiFetch<BackendDropdownValue[]>(
-      `/dropdowns?category=${encodeURIComponent(backendCategory)}`
-    )
-      .then((rows) => {
+    const request = isVendor
+      ? apiFetch<BackendVendor[]>("/vendors").then((rows) => rows.map(toVendorDisplayValue))
+      : apiFetch<BackendDropdownValue[]>(
+          `/dropdowns?category=${encodeURIComponent(backendCategory)}`
+        ).then((rows) => rows.map(toDisplayValue));
+
+    request
+      .then((values) => {
         if (cancelled) return;
         setDropdownData((prev) => ({
           ...prev,
-          [selectedCategory]: rows.map(toDisplayValue),
+          [selectedCategory]: values,
         }));
       })
       .catch((err: Error) => {
@@ -175,6 +214,7 @@ function DropdownPage() {
     };
   }, [selectedCategory]);
 
+  const isVendorCategory = selectedCategory === VENDOR_CATEGORY_ID;
   const currentValues = dropdownData[selectedCategory] || [];
 
   const filteredValues = currentValues.filter((item) =>
@@ -188,6 +228,7 @@ function DropdownPage() {
   const handleAddClick = () => {
     setEditingItem(null);
     setValueName("");
+    setValueCode("");
     setValueError(null);
     setShowModal(true);
   };
@@ -195,6 +236,7 @@ function DropdownPage() {
   const handleEditClick = (item: DropdownValue) => {
     setEditingItem(item);
     setValueName(item.name);
+    setValueCode(item.code ?? "");
     setValueError(null);
     setShowModal(true);
   };
@@ -212,51 +254,86 @@ function DropdownPage() {
   };
 
   const handleSave = async () => {
+    const isVendor = selectedCategory === VENDOR_CATEGORY_ID;
     const trimmedName = valueName.trim();
+    const trimmedCode = valueCode.trim();
 
     if (!trimmedName) {
-      setValueError("Value name cannot be empty.");
+      setValueError(isVendor ? "Vendor name cannot be empty." : "Value name cannot be empty.");
       return;
     }
 
     if (trimmedName.length > 50) {
-      setValueError("Value name cannot exceed 50 characters.");
+      setValueError(isVendor ? "Vendor name cannot exceed 50 characters." : "Value name cannot exceed 50 characters.");
       return;
     }
 
-    const backendCategory = BACKEND_CATEGORY[selectedCategory];
+    if (isVendor && !editingItem && !trimmedCode) {
+      setValueError("Vendor code cannot be empty.");
+      return;
+    }
+
     setSaving(true);
 
     try {
-      if (editingItem) {
-        const updated = await apiFetch<BackendDropdownValue>(`/dropdowns/${editingItem.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ value: trimmedName }),
-        });
+      if (isVendor) {
+        if (editingItem) {
+          // vendorId (the code) is immutable once created — only name changes.
+          const updated = await apiFetch<BackendVendor>(`/vendors/${editingItem.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: trimmedName }),
+          });
 
-        setDropdownData((prev) => ({
-          ...prev,
-          [selectedCategory]: prev[selectedCategory].map((item) =>
-            item.id === editingItem.id ? toDisplayValue(updated) : item
-          ),
-        }));
+          setDropdownData((prev) => ({
+            ...prev,
+            [selectedCategory]: prev[selectedCategory].map((item) =>
+              item.id === editingItem.id ? toVendorDisplayValue(updated) : item
+            ),
+          }));
+        } else {
+          const created = await apiFetch<BackendVendor>("/vendors", {
+            method: "POST",
+            body: JSON.stringify({ vendorId: trimmedCode, name: trimmedName }),
+          });
+
+          setDropdownData((prev) => ({
+            ...prev,
+            [selectedCategory]: [...prev[selectedCategory], toVendorDisplayValue(created)],
+          }));
+        }
       } else {
-        const created = await apiFetch<BackendDropdownValue>("/dropdowns", {
-          method: "POST",
-          body: JSON.stringify({ category: backendCategory, value: trimmedName }),
-        });
+        const backendCategory = BACKEND_CATEGORY[selectedCategory];
 
-        setDropdownData((prev) => ({
-          ...prev,
-          [selectedCategory]: [...prev[selectedCategory], toDisplayValue(created)],
-        }));
+        if (editingItem) {
+          const updated = await apiFetch<BackendDropdownValue>(`/dropdowns/${editingItem.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ value: trimmedName }),
+          });
+
+          setDropdownData((prev) => ({
+            ...prev,
+            [selectedCategory]: prev[selectedCategory].map((item) =>
+              item.id === editingItem.id ? toDisplayValue(updated) : item
+            ),
+          }));
+        } else {
+          const created = await apiFetch<BackendDropdownValue>("/dropdowns", {
+            method: "POST",
+            body: JSON.stringify({ category: backendCategory, value: trimmedName }),
+          });
+
+          setDropdownData((prev) => ({
+            ...prev,
+            [selectedCategory]: [...prev[selectedCategory], toDisplayValue(created)],
+          }));
+        }
       }
 
       setValueError(null);
       setShowModal(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setValueError("This value already exists in this category");
+        setValueError(isVendor ? "This vendor code already exists." : "This value already exists in this category");
       } else {
         setValueError(err instanceof Error ? err.message : "Failed to save value.");
       }
@@ -267,19 +344,28 @@ function DropdownPage() {
 
   const handleToggleActive = async (item: DropdownValue) => {
     setActionError(null);
-    const endpoint = item.isActive
-      ? `/dropdowns/${item.id}/deactivate`
-      : `/dropdowns/${item.id}/reactivate`;
+    const isVendor = selectedCategory === VENDOR_CATEGORY_ID;
+    const base = isVendor ? "/vendors" : "/dropdowns";
+    const endpoint = item.isActive ? `${base}/${item.id}/deactivate` : `${base}/${item.id}/reactivate`;
 
     try {
-      const updated = await apiFetch<BackendDropdownValue>(endpoint, { method: "PATCH" });
-
-      setDropdownData((prev) => ({
-        ...prev,
-        [selectedCategory]: prev[selectedCategory].map((value) =>
-          value.id === item.id ? toDisplayValue(updated) : value
-        ),
-      }));
+      if (isVendor) {
+        const updated = await apiFetch<BackendVendor>(endpoint, { method: "PATCH" });
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: prev[selectedCategory].map((value) =>
+            value.id === item.id ? toVendorDisplayValue(updated) : value
+          ),
+        }));
+      } else {
+        const updated = await apiFetch<BackendDropdownValue>(endpoint, { method: "PATCH" });
+        setDropdownData((prev) => ({
+          ...prev,
+          [selectedCategory]: prev[selectedCategory].map((value) =>
+            value.id === item.id ? toDisplayValue(updated) : value
+          ),
+        }));
+      }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update status.");
     }
@@ -347,7 +433,7 @@ function DropdownPage() {
             <div className="toolbar-actions">
               <button className="add-btn" onClick={handleAddClick}>
                 <Plus size={16} />
-                Add Value
+                {isVendorCategory ? "Add Vendor" : "Add Value"}
               </button>
             </div>
           </div>
@@ -358,6 +444,7 @@ function DropdownPage() {
             <table className="dropdown-table">
               <thead>
                 <tr>
+                  {isVendorCategory && <th>Code</th>}
                   <th>Name</th>
                   <th>Date Added</th>
                   <th>Status</th>
@@ -368,19 +455,20 @@ function DropdownPage() {
               <tbody>
                 {loading || categoryLoading ? (
                   <tr>
-                    <td colSpan={4} className="empty-state">
+                    <td colSpan={isVendorCategory ? 5 : 4} className="empty-state">
                       Loading...
                     </td>
                   </tr>
                 ) : loadError ? (
                   <tr>
-                    <td colSpan={4} className="empty-state">
+                    <td colSpan={isVendorCategory ? 5 : 4} className="empty-state">
                       Failed to load dropdown values: {loadError}
                     </td>
                   </tr>
                 ) : filteredValues.length > 0 ? (
                   paginatedValues.map((item) => (
                     <tr key={item.id}>
+                      {isVendorCategory && <td>{item.code}</td>}
                       <td>{item.name}</td>
                       <td>{item.dateAdded}</td>
                       <td>
@@ -404,7 +492,7 @@ function DropdownPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="empty-state">
+                    <td colSpan={isVendorCategory ? 5 : 4} className="empty-state">
                       No values found
                     </td>
                   </tr>
@@ -452,15 +540,40 @@ function DropdownPage() {
         <div className="modal-overlay" onClick={closeModal}>
           <div className="dropdown-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editingItem ? "Edit Value" : "Add Value"}</h2>
+              <h2>
+                {isVendorCategory
+                  ? editingItem ? "Edit Vendor" : "Add Vendor"
+                  : editingItem ? "Edit Value" : "Add Value"}
+              </h2>
               <button className="close-btn" onClick={closeModal}>
                 <X size={18} />
               </button>
             </div>
 
             <div className="modal-body">
+              {isVendorCategory && (
+                <div className="form-group">
+                  <label>Vendor Code</label>
+                  <input
+                    type="text"
+                    value={valueCode}
+                    disabled={!!editingItem}
+                    placeholder="e.g. TTL"
+                    onChange={(e) => {
+                      setValueCode(e.target.value);
+                      setValueError(null);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    autoFocus={!editingItem}
+                  />
+                  {!!editingItem && (
+                    <span className="field-hint">Vendor code can't be changed once created.</span>
+                  )}
+                </div>
+              )}
+
               <div className="form-group">
-                <label>Value Name</label>
+                <label>{isVendorCategory ? "Vendor Name" : "Value Name"}</label>
                 <input
                   type="text"
                   value={valueName}
@@ -469,7 +582,7 @@ function DropdownPage() {
                     setValueError(null);
                   }}
                   onKeyDown={handleKeyDown}
-                  autoFocus
+                  autoFocus={!isVendorCategory}
                 />
                 {valueError && (
                   <span className="field-error">

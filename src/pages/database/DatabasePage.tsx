@@ -50,6 +50,7 @@ function toStickerProps(item: InventoryAsset): AssetStickerProps {
     generation: item.generation,
     ram: item.ram,
     storage: item.storage,
+    speed: item.speed,
     screenType: item.screenType,
   };
 }

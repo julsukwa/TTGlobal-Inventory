@@ -17,6 +17,7 @@ export interface AssetStickerProps {
   generation?: string;
   ram?: string;
   storage?: string;
+  speed?: string;
   screenType?: string;
 }
 
@@ -30,10 +31,11 @@ export function AssetSticker({
   generation,
   ram,
   storage,
+  speed,
   screenType,
 }: AssetStickerProps) {
   const processorLine = [processor, generation].filter(Boolean).join(" • ");
-  const specsLine = [ram, storage].filter(Boolean).join(" • ");
+  const specsLine = [ram, storage, speed].filter(Boolean).join(" • ");
 
   return (
     <div className="asset-sticker">
