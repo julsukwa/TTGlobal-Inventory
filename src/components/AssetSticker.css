@@ -18,13 +18,14 @@
 }
 
 /* Text area and QR are absolutely positioned so the QR can never overlap text,
-   whatever the content length. */
+   whatever the content length. A 2mm safe margin on every side keeps content
+   clear of the label's curved corners. */
 .asset-sticker-info {
   position: absolute;
-  left: 1mm;
-  top: 1mm;
-  right: 16mm;
-  bottom: 1mm;
+  left: 2mm;
+  top: 2mm;
+  right: 17mm;
+  bottom: 2mm;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -34,14 +35,14 @@
 .asset-sticker-details {
   display: flex;
   flex-direction: column;
-  gap: 0.3mm;
   overflow: hidden;
 }
 
 .asset-sticker-title {
-  font-size: 7pt;
+  font-size: 8pt;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
+  margin-bottom: 0.3mm;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -49,9 +50,10 @@
 }
 
 .asset-sticker-category {
-  font-size: 6pt;
-  font-weight: 500;
-  line-height: 1.15;
+  font-size: 5pt;
+  font-weight: 600;
+  line-height: 1.1;
+  margin-bottom: 0.3mm;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -62,8 +64,9 @@
 .asset-sticker-specs,
 .asset-sticker-screen {
   font-size: 6pt;
-  font-weight: 500;
-  line-height: 1.15;
+  font-weight: 600;
+  line-height: 1.1;
+  margin-bottom: 0.3mm;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -77,8 +80,10 @@
 
 .asset-sticker-asset-id {
   font-family: "Courier New", Courier, monospace;
-  font-size: 6.5pt;
+  font-size: 9pt;
   font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 0.3mm;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -88,7 +93,7 @@
 .asset-sticker-batch {
   font-size: 5pt;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.1;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -97,11 +102,17 @@
 
 .asset-sticker-qr {
   position: absolute;
-  right: 1mm;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 14mm;
-  height: 14mm;
+  right: 2mm;
+  /* Vertically centered within the 21mm safe content height (25mm sticker
+     minus the 2mm top/bottom safe margins): 2mm + (21mm - 13mm) / 2 = 6mm.
+     A fixed offset is used instead of top:50%+transform:translateY(-50%) —
+     that combination printed the QR cut off on the Zebra GK420d, since CSS
+     transforms are unreliable in some print rasterization pipelines with a
+     small fixed @page size. The sticker's dimensions are fixed, so a plain
+     top offset centers it identically without needing a transform. */
+  top: 6mm;
+  width: 13mm;
+  height: 13mm;
 }
 
 .asset-sticker-qr svg {
