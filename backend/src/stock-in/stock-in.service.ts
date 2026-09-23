@@ -61,6 +61,21 @@ export class StockInService {
     return count + 1;
   }
 
+  // For items with no list number — sequenced per shipment (via the
+  // ShipmentID-YY- asset ID prefix, which is shipment-specific since
+  // Shipment.shipmentId is unique) instead of per list number.
+  async getNextNoListSequence(
+    shipmentStringId: string,
+    year: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const prefix = `${shipmentStringId}-${year}-`;
+    const count = await client.inventoryItem.count({
+      where: { listNumber: '', assetId: { startsWith: prefix } },
+    });
+    return count + 1;
+  }
+
   async generateBatchId(
     shipment: { shipmentId: string },
     vendor: { vendorId: string },
@@ -80,6 +95,15 @@ export class StockInService {
     const year = this.currentYearSuffix();
     const sequence = await this.getNextAssetSequence(listNumber, year, client);
     return `${listNumber}-${year}-${sequence.toString().padStart(4, '0')}`;
+  }
+
+  async generateNoListAssetId(
+    shipmentStringId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<string> {
+    const year = this.currentYearSuffix();
+    const sequence = await this.getNextNoListSequence(shipmentStringId, year, client);
+    return `${shipmentStringId}-${year}-${sequence.toString().padStart(4, '0')}`;
   }
 
   async processManualStockIn(dto: ManualStockInDto, userId: number): Promise<StockInResult> {
@@ -185,15 +209,19 @@ export class StockInService {
         const listNumbers: string[] = [];
 
         for (const item of items) {
-          if (!listNumbers.includes(item.listNumber)) {
-            listNumbers.push(item.listNumber);
+          const listNumber = item.listNumber?.trim() ?? '';
+
+          if (listNumber && !listNumbers.includes(listNumber)) {
+            listNumbers.push(listNumber);
           }
 
           for (let unit = 0; unit < item.quantity; unit++) {
             const assetId =
               item.assetIdSource === 'provided'
                 ? (item.providedAssetId as string)
-                : await this.generateAssetId(item.listNumber, tx);
+                : listNumber
+                  ? await this.generateAssetId(listNumber, tx)
+                  : await this.generateNoListAssetId(shipment.shipmentId, tx);
 
             const inventoryItem = await tx.inventoryItem.create({
               data: {
@@ -202,7 +230,7 @@ export class StockInService {
                   item.assetIdSource === 'provided'
                     ? AssetIdSource.PROVIDED
                     : AssetIdSource.GENERATED,
-                listNumber: item.listNumber,
+                listNumber,
                 batchId: batch.id,
                 shipmentId: shipment.id,
                 category: item.category,
@@ -259,27 +287,29 @@ export class StockInService {
     }
 
     for (const item of items) {
+      const itemLabel = item.listNumber?.trim() || '(no list number)';
+
       if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
         throw new BadRequestException(
-          `quantity must be a positive integer for list number "${item.listNumber}"`,
+          `quantity must be a positive integer for list number "${itemLabel}"`,
         );
       }
 
       if (item.assetIdSource !== 'generated' && item.assetIdSource !== 'provided') {
         throw new BadRequestException(
-          `assetIdSource must be "generated" or "provided" for list number "${item.listNumber}"`,
+          `assetIdSource must be "generated" or "provided" for list number "${itemLabel}"`,
         );
       }
 
       if (item.assetIdSource === 'provided') {
         if (!item.providedAssetId || !item.providedAssetId.trim()) {
           throw new BadRequestException(
-            `providedAssetId is required when assetIdSource is "provided" (list number "${item.listNumber}")`,
+            `providedAssetId is required when assetIdSource is "provided" (list number "${itemLabel}")`,
           );
         }
         if (item.quantity > 1) {
           throw new BadRequestException(
-            `quantity must be 1 when assetIdSource is "provided" (list number "${item.listNumber}")`,
+            `quantity must be 1 when assetIdSource is "provided" (list number "${itemLabel}")`,
           );
         }
       }

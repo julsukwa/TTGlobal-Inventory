@@ -107,6 +107,11 @@ export default function DatabasePage() {
   const [vendorFilter, setVendorFilter] = useState("All");
   const [shipmentFilter, setShipmentFilter] = useState("All");
   const [idSourceFilter, setIdSourceFilter] = useState("All");
+  const [processorFilter, setProcessorFilter] = useState("All");
+  const [generationFilter, setGenerationFilter] = useState("All");
+  const [ramFilter, setRamFilter] = useState("All");
+  const [storageFilter, setStorageFilter] = useState("All");
+  const [includeOldIssued, setIncludeOldIssued] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [selectedAsset, setSelectedAsset] = useState<InventoryAsset | null>(null);
@@ -163,6 +168,22 @@ export default function DatabasePage() {
     () => [...new Set(allItems.map((i) => i.shipmentId))].sort(),
     [allItems]
   );
+  const processors = useMemo(
+    () => [...new Set(allItems.map((i) => i.processor))].filter(Boolean).sort(),
+    [allItems]
+  );
+  const generations = useMemo(
+    () => [...new Set(allItems.map((i) => i.generation))].filter(Boolean).sort(),
+    [allItems]
+  );
+  const rams = useMemo(
+    () => [...new Set(allItems.map((i) => i.ram))].filter(Boolean).sort(),
+    [allItems]
+  );
+  const storages = useMemo(
+    () => [...new Set(allItems.map((i) => i.storage))].filter(Boolean).sort(),
+    [allItems]
+  );
 
   // ── Summary figures — from GET /inventory/stats ──────────────────────────
 
@@ -191,6 +212,11 @@ export default function DatabasePage() {
       if (idSourceFilter !== "All") {
         params.set("assetIdSource", idSourceFilter === "Generated" ? "GENERATED" : "PROVIDED");
       }
+      if (processorFilter !== "All") params.set("processor", processorFilter);
+      if (generationFilter !== "All") params.set("generation", generationFilter);
+      if (ramFilter !== "All") params.set("ram", ramFilter);
+      if (storageFilter !== "All") params.set("storage", storageFilter);
+      if (includeOldIssued) params.set("includeOldIssued", "true");
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
       const query = params.toString();
 
@@ -210,7 +236,20 @@ export default function DatabasePage() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [categoryFilter, brandFilter, statusFilter, vendorFilter, shipmentFilter, idSourceFilter, searchTerm]);
+  }, [
+    categoryFilter,
+    brandFilter,
+    statusFilter,
+    vendorFilter,
+    shipmentFilter,
+    idSourceFilter,
+    processorFilter,
+    generationFilter,
+    ramFilter,
+    storageFilter,
+    includeOldIssued,
+    searchTerm,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(inventory.length / ITEMS_PER_PAGE));
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -233,6 +272,11 @@ export default function DatabasePage() {
     setVendorFilter("All");
     setShipmentFilter("All");
     setIdSourceFilter("All");
+    setProcessorFilter("All");
+    setGenerationFilter("All");
+    setRamFilter("All");
+    setStorageFilter("All");
+    setIncludeOldIssued(false);
     setCurrentPage(1);
   };
 
@@ -591,9 +635,95 @@ export default function DatabasePage() {
             </select>
           </div>
 
+          <div className="db-filter">
+            <select
+              value={processorFilter}
+              onChange={(e) => {
+                setProcessorFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Processors</option>
+              {processors.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={generationFilter}
+              onChange={(e) => {
+                setGenerationFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Generations</option>
+              {generations.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={ramFilter}
+              onChange={(e) => {
+                setRamFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All RAM</option>
+              {rams.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="db-filter">
+            <select
+              value={storageFilter}
+              onChange={(e) => {
+                setStorageFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="All">All Storage</option>
+              {storages.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button className="db-clear-filters-btn" onClick={handleClearFilters}>
             Clear Filters
           </button>
+
+          <div className="db-issued-toggle-wrap">
+            <label className="db-issued-toggle">
+              <input
+                type="checkbox"
+                checked={includeOldIssued}
+                onChange={(e) => {
+                  setIncludeOldIssued(e.target.checked);
+                  setCurrentPage(1);
+                }}
+              />
+              Include old issued items (3+ months)
+            </label>
+            <span className="db-issued-toggle-note">
+              Issued items older than 3 months are hidden by default to keep the view clean. All
+              data is permanently retained.
+            </span>
+          </div>
         </div>
 
         <div className="db-table-wrap">

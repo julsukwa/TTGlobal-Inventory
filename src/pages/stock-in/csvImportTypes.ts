@@ -48,13 +48,27 @@ const DETAILED_COLUMNS = [
 ] as const;
 
 /**
- * The raw set of column headers the system accepts in an uploaded CSV,
+ * The raw set of column headers the system recognises in an uploaded CSV,
  * dependent on the selected upload type. LCD rows simply leave the
  * tech-spec columns blank. Workstation rows follow the same field
  * requirements as Laptop/Desktop/All In One (no exemptions).
+ *
+ * Not every column here is required to be present — see
+ * CSV_MANDATORY_COLUMNS for the subset the header must actually contain.
  */
 export function CSV_REQUIRED_COLUMNS(uploadType: CsvUploadType): readonly string[] {
   return uploadType === "detailed" ? DETAILED_COLUMNS : SUMMARY_COLUMNS;
+}
+
+/**
+ * The columns whose header must actually be present in the uploaded file —
+ * everything CSV_REQUIRED_COLUMNS recognises except List Number, which is
+ * optional: a missing column, or a blank cell in a present column, both mean
+ * "no list number" for that row (mirrors Manual Entry's optional List Number
+ * field — see ManualStockInPage.tsx).
+ */
+export function CSV_MANDATORY_COLUMNS(uploadType: CsvUploadType): readonly string[] {
+  return CSV_REQUIRED_COLUMNS(uploadType).filter((col) => col !== "List Number");
 }
 
 export type CsvColumn = (typeof SUMMARY_COLUMNS)[number] | (typeof DETAILED_COLUMNS)[number];

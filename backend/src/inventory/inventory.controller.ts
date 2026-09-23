@@ -33,6 +33,11 @@ export class InventoryController {
     @Query('listNumber') listNumber?: string,
     @Query('assetIdSource') assetIdSource?: string,
     @Query('search') search?: string,
+    @Query('processor') processor?: string,
+    @Query('generation') generation?: string,
+    @Query('ram') ram?: string,
+    @Query('storage') storage?: string,
+    @Query('includeOldIssued') includeOldIssued?: string,
   ) {
     return this.inventoryService.findAll({
       category,
@@ -43,6 +48,11 @@ export class InventoryController {
       listNumber,
       assetIdSource,
       search,
+      processor,
+      generation,
+      ram,
+      storage,
+      includeOldIssued: includeOldIssued === 'true',
     });
   }
 

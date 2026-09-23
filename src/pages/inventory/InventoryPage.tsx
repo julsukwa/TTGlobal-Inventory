@@ -101,11 +101,19 @@ export default function InventoryPage() {
   });
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
+  const [processorFilter, setProcessorFilter] = useState("all");
+  const [generationFilter, setGenerationFilter] = useState("all");
+  const [ramFilter, setRamFilter] = useState("all");
+  const [storageFilter, setStorageFilter] = useState("all");
   const [listNumberFilter, setListNumberFilter] = useState(() => searchParams.get("listNumber") ?? "");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [categories, setCategories] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
+  const [processors, setProcessors] = useState<string[]>([]);
+  const [generations, setGenerations] = useState<string[]>([]);
+  const [rams, setRams] = useState<string[]>([]);
+  const [storages, setStorages] = useState<string[]>([]);
   const [activeFaultTypes, setActiveFaultTypes] = useState<string[]>([]);
 
   useEffect(() => {
@@ -114,13 +122,23 @@ export default function InventoryPage() {
         .then((rows) => rows.map((r) => r.value))
         .catch(() => [] as string[]);
 
-    Promise.all([fetchValues("Category"), fetchValues("Brand"), fetchValues("Fault")]).then(
-      ([categoryValues, brandValues, faultValues]) => {
-        setCategories(categoryValues);
-        setBrands(brandValues);
-        setActiveFaultTypes(faultValues);
-      }
-    );
+    Promise.all([
+      fetchValues("Category"),
+      fetchValues("Brand"),
+      fetchValues("Fault"),
+      fetchValues("Processor"),
+      fetchValues("Generation"),
+      fetchValues("RAM"),
+      fetchValues("Storage"),
+    ]).then(([categoryValues, brandValues, faultValues, processorValues, generationValues, ramValues, storageValues]) => {
+      setCategories(categoryValues);
+      setBrands(brandValues);
+      setActiveFaultTypes(faultValues);
+      setProcessors(processorValues);
+      setGenerations(generationValues);
+      setRams(ramValues);
+      setStorages(storageValues);
+    });
   }, []);
 
   // ── Fetch — status/listNumber/category/brand are applied server-side;
@@ -136,6 +154,10 @@ export default function InventoryPage() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
       if (brandFilter !== "all") params.set("brand", brandFilter);
+      if (processorFilter !== "all") params.set("processor", processorFilter);
+      if (generationFilter !== "all") params.set("generation", generationFilter);
+      if (ramFilter !== "all") params.set("ram", ramFilter);
+      if (storageFilter !== "all") params.set("storage", storageFilter);
       if (listNumberFilter.trim()) params.set("listNumber", listNumberFilter.trim());
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
       const query = params.toString();
@@ -156,7 +178,17 @@ export default function InventoryPage() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [statusFilter, categoryFilter, brandFilter, listNumberFilter, searchTerm]);
+  }, [
+    statusFilter,
+    categoryFilter,
+    brandFilter,
+    processorFilter,
+    generationFilter,
+    ramFilter,
+    storageFilter,
+    listNumberFilter,
+    searchTerm,
+  ]);
 
   const okCount = useMemo(() => items.filter((i) => i.status === "OK").length, [items]);
   const faultyCount = useMemo(() => items.filter((i) => i.status === "FAULTY").length, [items]);
@@ -171,6 +203,10 @@ export default function InventoryPage() {
     setStatusFilter("all");
     setCategoryFilter("all");
     setBrandFilter("all");
+    setProcessorFilter("all");
+    setGenerationFilter("all");
+    setRamFilter("all");
+    setStorageFilter("all");
     setListNumberFilter("");
     setCurrentPage(1);
   };
@@ -553,6 +589,74 @@ export default function InventoryPage() {
               {brands.map((b) => (
                 <option key={b} value={b}>
                   {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inv-filter">
+            <select
+              value={processorFilter}
+              onChange={(e) => {
+                setProcessorFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Processors</option>
+              {processors.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inv-filter">
+            <select
+              value={generationFilter}
+              onChange={(e) => {
+                setGenerationFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Generations</option>
+              {generations.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inv-filter">
+            <select
+              value={ramFilter}
+              onChange={(e) => {
+                setRamFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All RAM</option>
+              {rams.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inv-filter">
+            <select
+              value={storageFilter}
+              onChange={(e) => {
+                setStorageFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Storage</option>
+              {storages.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>

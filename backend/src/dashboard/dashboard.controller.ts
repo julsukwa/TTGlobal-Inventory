@@ -24,6 +24,10 @@ export class DashboardController {
     @Query('search') search?: string,
     @Query('category') category?: string,
     @Query('brand') brand?: string,
+    @Query('processor') processor?: string,
+    @Query('generation') generation?: string,
+    @Query('ram') ram?: string,
+    @Query('storage') storage?: string,
   ) {
     return this.dashboardService.getAvailableInventory({
       status,
@@ -31,6 +35,10 @@ export class DashboardController {
       search,
       category,
       brand,
+      processor,
+      generation,
+      ram,
+      storage,
     });
   }
 }

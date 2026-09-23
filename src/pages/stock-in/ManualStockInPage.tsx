@@ -90,7 +90,6 @@ function validateForm(
   editingId: number | null,
   sessionItems: SessionInventoryItem[]
 ): string | null {
-  if (!form.listNumber.trim()) return "List Number is required.";
   if (form.assetIdSource === "provided" && !form.providedAssetId.trim())
     return "Asset ID is required when Provided is selected.";
   if (!form.category) return "Please select a category.";
@@ -594,13 +593,13 @@ export default function ManualStockInPage() {
         <div className="manual-form-top">
           <div className="form-field">
             <label>
-              List Number <span className="required">*</span>
+              List Number <span className="optional">(optional)</span>
             </label>
             <input
               name="listNumber"
               value={form.listNumber}
               onChange={handleChange}
-              placeholder="e.g. LIST-A, BATCH-001, OFFICE-ITEMS"
+              placeholder="e.g. LIST-A (leave empty for non-list items)"
             />
             {existingGroupForListNumber && (
               <p className="list-number-warning">
@@ -968,7 +967,7 @@ export default function ManualStockInPage() {
                   <Fragment key={group.listNumber}>
                     <tr className="session-group-header-row">
                       <td colSpan={16} className="session-group-header">
-                        <strong>{group.listNumber}</strong> — {group.items.length} item
+                        <strong>{group.listNumber || "No List Number"}</strong> — {group.items.length} item
                         {group.items.length !== 1 ? "s" : ""}, {group.totalQuantity} unit
                         {group.totalQuantity !== 1 ? "s" : ""} total
                       </td>

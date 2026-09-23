@@ -1,5 +1,5 @@
 export class ManualStockInItemDto {
-  listNumber: string;
+  listNumber?: string; // omitted/empty => item gets a ShipmentID-YY-NNNN asset ID instead
   assetIdSource: 'generated' | 'provided';
   providedAssetId?: string; // required when assetIdSource is 'provided'
   category: string;

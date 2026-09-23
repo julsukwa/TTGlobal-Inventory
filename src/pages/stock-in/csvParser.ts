@@ -3,6 +3,7 @@
 import * as XLSX from "xlsx";
 import {
   CSV_REQUIRED_COLUMNS,
+  CSV_MANDATORY_COLUMNS,
   type CsvColumn,
   type CsvUploadType,
   type RawCsvRow,
@@ -112,8 +113,10 @@ function buildRowsFromCells(
     }
   });
 
-  // Required column validation — every column for this upload type must be present
-  const requiredColumns = CSV_REQUIRED_COLUMNS(uploadType);
+  // Required column validation — every mandatory column for this upload type
+  // must be present. List Number is recognised (see HEADER_LOOKUPS above)
+  // but optional, so it's excluded from this check.
+  const requiredColumns = CSV_MANDATORY_COLUMNS(uploadType);
   const missingColumns = requiredColumns.filter((col) => !(col in columnMap));
 
   if (missingColumns.length > 0) {
@@ -302,11 +305,9 @@ export function validateCsvRows(
     const category = row.category.trim();
     const isLCD = isLCDCategory(category);
 
-    // Required field validation
-    if (!row.listNumber.trim()) {
-      errors.push("List Number is required.");
-    }
-
+    // Required field validation — List Number is intentionally not checked
+    // here; a blank cell (or a missing column entirely) just means this row
+    // has no list number, same as leaving it empty in Manual Entry.
     if (uploadType === "detailed" && !row.assetId.trim()) {
       errors.push("Asset ID is required for detailed uploads.");
     }

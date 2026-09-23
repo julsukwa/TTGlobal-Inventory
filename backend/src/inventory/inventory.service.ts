@@ -12,7 +12,14 @@ export interface InventoryFilters {
   listNumber?: string;
   assetIdSource?: string;
   search?: string;
+  processor?: string;
+  generation?: string;
+  ram?: string;
+  storage?: string;
+  includeOldIssued?: boolean;
 }
+
+const ISSUED_DISPLAY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 const VALID_ITEM_STATUSES = Object.values(ItemStatus);
 const VALID_ASSET_ID_SOURCES = Object.values(AssetIdSource);
@@ -48,6 +55,10 @@ export class InventoryService {
     if (filters?.category) where.category = filters.category;
     if (filters?.brand) where.brand = filters.brand;
     if (filters?.listNumber) where.listNumber = filters.listNumber;
+    if (filters?.processor) where.processor = filters.processor;
+    if (filters?.generation) where.generation = filters.generation;
+    if (filters?.ram) where.ram = filters.ram;
+    if (filters?.storage) where.storage = filters.storage;
 
     if (filters?.status) {
       if (!VALID_ITEM_STATUSES.includes(filters.status as ItemStatus)) {
@@ -74,13 +85,39 @@ export class InventoryService {
       };
     }
 
+    // where.OR is reserved below for the always-on ISSUED age filter, so
+    // search's OR-based condition is folded into where.AND instead —
+    // otherwise the two would clobber each other rather than combine.
+    const andConditions: Prisma.InventoryItemWhereInput[] = [];
+
     if (filters?.search) {
-      where.OR = [
-        { assetId: { contains: filters.search, mode: 'insensitive' } },
-        { model: { contains: filters.search, mode: 'insensitive' } },
-        { listNumber: { contains: filters.search, mode: 'insensitive' } },
-        { batch: { batchId: { contains: filters.search, mode: 'insensitive' } } },
-      ];
+      andConditions.push({
+        OR: [
+          { assetId: { contains: filters.search, mode: 'insensitive' } },
+          { model: { contains: filters.search, mode: 'insensitive' } },
+          { listNumber: { contains: filters.search, mode: 'insensitive' } },
+          { batch: { batchId: { contains: filters.search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    // Display filter only — ISSUED items older than 90 days are hidden from
+    // the default view but never deleted. Always applied unless the caller
+    // explicitly opts into seeing everything (e.g. for an audit).
+    if (!filters?.includeOldIssued) {
+      andConditions.push({
+        OR: [
+          { status: { not: ItemStatus.ISSUED } },
+          {
+            status: ItemStatus.ISSUED,
+            updatedAt: { gte: new Date(Date.now() - ISSUED_DISPLAY_WINDOW_MS) },
+          },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const items = await this.prisma.inventoryItem.findMany({

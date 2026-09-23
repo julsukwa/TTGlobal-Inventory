@@ -8,6 +8,10 @@ export interface DashboardInventoryFilters {
   search?: string;
   category?: string;
   brand?: string;
+  processor?: string;
+  generation?: string;
+  ram?: string;
+  storage?: string;
 }
 
 type ListStatus = 'closed' | 'open' | 'sold';
@@ -103,6 +107,10 @@ export class DashboardService {
     if (filters?.listNumber) where.listNumber = filters.listNumber;
     if (filters?.category) where.category = filters.category;
     if (filters?.brand) where.brand = filters.brand;
+    if (filters?.processor) where.processor = filters.processor;
+    if (filters?.generation) where.generation = filters.generation;
+    if (filters?.ram) where.ram = filters.ram;
+    if (filters?.storage) where.storage = filters.storage;
 
     if (filters?.search) {
       where.OR = [
@@ -121,8 +129,11 @@ export class DashboardService {
   }
 
   private async getListBreakdown(): Promise<ListBreakdown[]> {
+    // Items with no list number (see stock-in's ShipmentID-YY-NNNN asset IDs)
+    // aren't part of any list and never appear on the Lists page.
     const groups = await this.prisma.inventoryItem.groupBy({
       by: ['listNumber', 'status'],
+      where: { listNumber: { not: '' } },
       _count: { _all: true },
     });
 
