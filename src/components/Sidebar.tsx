@@ -12,7 +12,8 @@ import {
   ListFilter,
   ArrowDownToLine,
   ArrowUpFromLine,
-  AlertTriangle,
+  Package,
+  List,
   LogOut,
 } from "lucide-react";
 
@@ -33,7 +34,8 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const showSystemSection =
     canSee("adjustments") || canSee("database") || canSee("dropdowns");
-  const showStockSection = canSee("stockIn") || canSee("stockOut") || canSee("faultyStock");
+  const showStockSection =
+    canSee("stockIn") || canSee("stockOut") || canSee("inventory") || canSee("lists");
 
   return (
     <aside className={`sidebar${isOpen ? " sidebar--open" : ""}`}>
@@ -186,16 +188,29 @@ function Sidebar({ isOpen, onClose }: SidebarProps) {
               </NavLink>
             )}
 
-            {canSee("faultyStock") && (
+            {canSee("inventory") && (
               <NavLink
-                to="/faulty-stock"
+                to="/inventory-available"
                 onClick={onClose}
                 className={({ isActive }) =>
                   isActive ? "sidebar-item active-item" : "sidebar-item"
                 }
               >
-                <AlertTriangle size={16} />
-                <span>Faulty Stock</span>
+                <Package size={16} />
+                <span>Inventory</span>
+              </NavLink>
+            )}
+
+            {canSee("lists") && (
+              <NavLink
+                to="/lists"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  isActive ? "sidebar-item active-item" : "sidebar-item"
+                }
+              >
+                <List size={16} />
+                <span>Lists</span>
               </NavLink>
             )}
           </>

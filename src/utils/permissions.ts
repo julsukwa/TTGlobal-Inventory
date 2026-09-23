@@ -23,6 +23,8 @@ export const PERMISSIONS: Record<string, RoutePermission> = {
   adjustments:    { canView: ['ADMIN','STAFF_WAREHOUSE'],                                canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
   database:       { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN'] },
   faultyStock:    { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
+  inventory:      { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
+  lists:          { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN'] },
   stickerQueue:   { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WAREHOUSE'] },
   warranty:       { canView: ['ADMIN','STAFF_SALES','STAFF_WAREHOUSE','STAFF_WARRANTY'], canEdit: ['ADMIN','STAFF_WARRANTY'] },
 };

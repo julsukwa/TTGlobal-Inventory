@@ -12,6 +12,8 @@ import AdjustmentsPage from "./pages/adjustments/AdjustmentsPage";
 import NewAdjustmentPage from "./pages/adjustments/NewAdjustmentPage";
 import DatabasePage from "./pages/database/DatabasePage";
 import FaultyStockPage from "./pages/faulty-stock/FaultyStockPage";
+import InventoryPage from "./pages/inventory/InventoryPage";
+import ListsPage from "./pages/lists/ListsPage";
 import StockInPage from "./pages/stock-in/StockInPage";
 import ImportInventoryPage from "./pages/stock-in/ImportInventoryPage";
 import ManualStockInPage from "./pages/stock-in/ManualStockInPage";
@@ -47,6 +49,8 @@ function App() {
           <Route path="/adjustments/new" element={<NewAdjustmentPage />} />
           <Route path="/database"        element={<DatabasePage />} />
           <Route path="/faulty-stock"    element={<FaultyStockPage />} />
+          <Route path="/inventory-available" element={<InventoryPage />} />
+          <Route path="/lists"           element={<ListsPage />} />
 
           {/* Stock-In flow */}
           <Route path="/stock-in"                               element={<StockInPage />} />
