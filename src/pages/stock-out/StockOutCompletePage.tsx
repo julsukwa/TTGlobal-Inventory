@@ -10,12 +10,7 @@ import {
 import "./StockOutCompletePage.css";
 import type { StockOutApiItem, StockOutApiTransaction } from "./stockOutTypes";
 import { displayItemStatus } from "./stockOutTypes";
-
-// BACKEND INTEGRATION SEAM:
-// Delivery note PDF: GET /stock-out/:invoiceNumber/delivery-note
-// The invoiceNumber is the unique identifier for every transaction.
-// For now the Download button is a placeholder — PDF generation will
-// be implemented once the backend transaction endpoint is live.
+import { generateDeliveryNote } from "../../utils/generateDeliveryNote";
 
 export default function StockOutCompletePage() {
   const navigate = useNavigate();
@@ -65,7 +60,10 @@ export default function StockOutCompletePage() {
             system.
           </p>
         </div>
-        <button className="soc-download-btn">
+        <button
+          className="soc-download-btn"
+          onClick={() => generateDeliveryNote(state)}
+        >
           <Download size={14} />
           Download Delivery Note
         </button>

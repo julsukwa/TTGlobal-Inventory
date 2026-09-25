@@ -14,6 +14,7 @@ import type { StockOutApiTransaction } from "./stockOutTypes";
 import { displayItemStatus } from "./stockOutTypes";
 import { apiFetch } from "../../services/api";
 import { Pagination, ListNumberBadge } from "../../components/ui";
+import { generateDeliveryNote } from "../../utils/generateDeliveryNote";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -204,6 +205,7 @@ export default function StockOutPage() {
                       <button
                         className="so-action-btn so-download-btn"
                         title="Download delivery note"
+                        onClick={() => generateDeliveryNote(t)}
                       >
                         <Download size={14} />
                       </button>
@@ -338,7 +340,10 @@ export default function StockOutPage() {
             </div>
 
             <div className="so-drawer-footer">
-              <button className="so-drawer-download-btn">
+              <button
+                className="so-drawer-download-btn"
+                onClick={() => generateDeliveryNote(selectedTransaction)}
+              >
                 <Download size={14} />
                 Download Delivery Note
               </button>

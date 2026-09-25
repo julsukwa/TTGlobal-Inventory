@@ -132,7 +132,11 @@ export default function InventoryPage() {
         .catch(() => [] as string[]);
 
     Promise.all([
-      fetchValues("Category"),
+      // The Dropdowns module stores this category's values under "ItemType"
+      // (see DropdownPage.tsx's DROPDOWN_CATEGORIES / BACKEND_CATEGORY map
+      // and ManualStockInPage.tsx's matching fetch) — "Category" doesn't
+      // exist as a dropdown category name and silently returns [].
+      fetchValues("ItemType"),
       fetchValues("Brand"),
       fetchValues("Fault"),
       fetchValues("Processor"),
