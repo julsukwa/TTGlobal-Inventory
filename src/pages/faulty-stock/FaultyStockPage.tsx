@@ -525,7 +525,17 @@ export default function FaultyStockPage() {
                     <td>
                       <span className="fs-category-badge">{item.category}</span>
                     </td>
-                    <td>{item.condition || "—"}</td>
+                    <td>
+                      {item.condition ? (
+                        <span
+                          className={`condition-badge condition-${item.condition.toLowerCase()}`}
+                        >
+                          {item.condition}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="fs-specs-cell">{item.processor || "—"}</td>

@@ -139,12 +139,13 @@ export default function DashboardPage() {
           Icon: AlertCircle,
           colorClass: "dash-kpi-icon-amber",
           onClick: () => navigate("/lists?status=open"),
-          danger: stats.isEndOfMonth,
-          warningText: stats.isEndOfMonth
-            ? `Warning: ${stats.daysUntilMonthEnd} day${
-                stats.daysUntilMonthEnd === 1 ? "" : "s"
-              } until month end. Open lists must be cleared.`
-            : undefined,
+          danger: stats.isEndOfMonth && stats.openLists > 0,
+          warningText:
+            stats.isEndOfMonth && stats.openLists > 0
+              ? `Warning: ${stats.daysUntilMonthEnd} day${
+                  stats.daysUntilMonthEnd === 1 ? "" : "s"
+                } until month end. Open lists must be cleared.`
+              : undefined,
         },
       ]
     : [];
@@ -174,10 +175,12 @@ export default function DashboardPage() {
               className={`dash-kpi-card${kpi.danger ? " dash-kpi-card-danger" : ""}`}
               onClick={kpi.onClick}
             >
-              <span className={`dash-kpi-icon ${kpi.colorClass}`}>
-                <kpi.Icon size={18} />
-              </span>
-              <span className="dash-kpi-label">{kpi.label}</span>
+              <div className="dash-kpi-header">
+                <span className={`dash-kpi-icon ${kpi.colorClass}`}>
+                  <kpi.Icon size={14} />
+                </span>
+                <span className="dash-kpi-label">{kpi.label}</span>
+              </div>
               <h2 className="dash-kpi-value">{kpi.value}</h2>
               <p className="dash-kpi-subtext">{kpi.subtext}</p>
               {kpi.warningText && <p className="dash-kpi-warning-banner">{kpi.warningText}</p>}

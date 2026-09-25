@@ -121,11 +121,26 @@ export class DashboardService {
       ];
     }
 
-    return this.prisma.inventoryItem.findMany({
+    const items = await this.prisma.inventoryItem.findMany({
       where,
-      include: dashboardInventoryInclude,
+      include: {
+        ...dashboardInventoryInclude,
+        adjustments: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
       orderBy: { importedAt: 'desc' },
     });
+
+    return items.map(({ adjustments, ...item }) => this.attachFaultTypes(item, adjustments));
+  }
+
+  private attachFaultTypes<T extends { status: ItemStatus }>(
+    item: T,
+    adjustments: { faultTypes: string[] }[],
+  ): T & { faultTypes: string[] } {
+    return {
+      ...item,
+      faultTypes: item.status === ItemStatus.FAULTY ? (adjustments[0]?.faultTypes ?? []) : [],
+    };
   }
 
   private async getListBreakdown(): Promise<ListBreakdown[]> {

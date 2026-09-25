@@ -462,7 +462,7 @@ export default function InventoryPage() {
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExportCsv = () => {
     const header =
-      "List Number,Asset ID,Batch ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Import Date";
+      "List Number,Asset ID,Batch ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Fault Types,Import Date";
     const lines = items.map((item) => {
       const cells = [
         item.listNumber,
@@ -478,6 +478,7 @@ export default function InventoryPage() {
         item.speed,
         item.screenType,
         item.status,
+        item.faultTypes?.join(", ") ?? "",
         item.importDate,
       ];
       return cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",");
@@ -752,7 +753,17 @@ export default function InventoryPage() {
                     <td>
                       <span className="inv-category-badge">{item.category}</span>
                     </td>
-                    <td>{item.condition || "—"}</td>
+                    <td>
+                      {item.condition ? (
+                        <span
+                          className={`condition-badge condition-${item.condition.toLowerCase()}`}
+                        >
+                          {item.condition}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="inv-specs-cell">{item.processor || "—"}</td>

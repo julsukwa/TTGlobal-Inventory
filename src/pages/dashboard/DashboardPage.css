@@ -86,14 +86,20 @@
   border-color: var(--color-danger-text);
 }
 
+.dash-kpi-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .dash-kpi-icon {
-  width: 40px;
-  height: 40px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-3);
+  flex-shrink: 0;
 }
 
 .dash-kpi-icon-blue   { background: var(--color-primary-soft); color: var(--color-primary); }

@@ -6,11 +6,11 @@
 // Available" / "OK Stock" / "Faulty Stock" cards.
 //
 // Backed by GET /dashboard/inventory (see backend/src/dashboard), which
-// returns the same batch/shipment shape as GET /inventory but — unlike that
-// endpoint — does not join in adjustments, so list rows never carry
-// faultTypes. The Asset Information drawer fetches the full record via
+// returns the same batch/shipment shape as GET /inventory, including the
+// latest adjustment's faultTypes for FAULTY rows (empty array otherwise).
+// The Asset Information drawer still fetches the full record via
 // GET /inventory/:assetId (see databaseTypes.ts's BackendInventoryItem/
-// toInventoryAsset) on open, which is where fault information comes from.
+// toInventoryAsset) on open for fault notes and the adjustment id.
 
 export type AvailableStatus = "OK" | "FAULTY";
 export type AvailableAssetIdSource = "GENERATED" | "PROVIDED";
@@ -41,6 +41,7 @@ export interface BackendAvailableInventoryItem {
     shipmentName: string;
     vendor: { vendorId: string; name: string };
   };
+  faultTypes: string[];
 }
 
 export interface AvailableInventoryItem {
@@ -64,6 +65,7 @@ export interface AvailableInventoryItem {
   notes: string;
   status: AvailableStatus;
   importDate: string; // display string derived from importedAt
+  faultTypes: string[];
 }
 
 function formatDateTime(iso: string): string {
@@ -99,5 +101,6 @@ export function toAvailableInventoryItem(raw: BackendAvailableInventoryItem): Av
     notes: raw.notes,
     status: raw.status,
     importDate: formatDateTime(raw.importedAt),
+    faultTypes: raw.faultTypes,
   };
 }

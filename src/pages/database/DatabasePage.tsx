@@ -407,7 +407,7 @@ export default function DatabasePage() {
 
   const handleExportCsv = () => {
     const header =
-      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Import Date,Fault Types,Notes";
+      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Fault Types,Import Date,Notes";
     const lines = inventory.map((item) => {
       const cells = [
         item.assetId,
@@ -426,8 +426,8 @@ export default function DatabasePage() {
         item.speed,
         item.screenType,
         item.status,
+        item.faultTypes?.join(", ") ?? "",
         item.importDate,
-        item.faultTypes.join(" | "),
         item.notes,
       ];
       return cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",");
@@ -799,7 +799,17 @@ export default function DatabasePage() {
                     <td>
                       <span className="db-category-badge">{item.category}</span>
                     </td>
-                    <td>{item.condition || "—"}</td>
+                    <td>
+                      {item.condition ? (
+                        <span
+                          className={`condition-badge condition-${item.condition.toLowerCase()}`}
+                        >
+                          {item.condition}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="db-specs-cell">{item.processor || "—"}</td>
