@@ -11,20 +11,6 @@ import {
   type CsvValidationResult,
 } from "./csvImportTypes";
 
-const VALID_COMMENT_VALUES = ["Non-Touch", "Touch Screen"];
-
-/** Strips spaces, hyphens, and underscores and lowercases — so "TouchScreen",
- * "Touch-Screen", "touch_screen", and "Touch Screen" all normalise to the
- * same key and match correctly. */
-function normaliseCommentKey(value: string): string {
-  return value.toLowerCase().replace(/[\s\-_]/g, "");
-}
-
-const COMMENT_LOOKUP: Record<string, string> = {};
-VALID_COMMENT_VALUES.forEach((v) => {
-  COMMENT_LOOKUP[normaliseCommentKey(v)] = v;
-});
-
 const VALID_CATEGORY_VALUES = ["Laptop", "Desktop", "All In One", "Workstation", "LCD"];
 const VALID_CONDITION_VALUES = ["New", "Refurb", "Used"];
 
@@ -344,9 +330,8 @@ export function validateCsvRows(
       if (!row.storage.trim()) errors.push("Storage is required for this category.");
     }
 
-    // Comment — silently blank invalid values rather than erroring
-    const rawComment = row.comment.trim();
-    const cleanedComment = COMMENT_LOOKUP[normaliseCommentKey(rawComment)] ?? "";
+    // Comment is free text — stored as-is (trimmed); blank stays blank
+    const cleanedComment = row.comment.trim();
 
     // Quantity validation — must be a valid positive integer
     const qtyTrimmed = row.quantity.trim();

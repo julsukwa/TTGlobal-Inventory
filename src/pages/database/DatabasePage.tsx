@@ -81,6 +81,15 @@ export default function DatabasePage() {
       });
   }, []);
 
+  // Comment options for the edit drawer, from the Dropdowns module.
+  const [commentOptions, setCommentOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<{ value: string }[]>("/dropdowns/active/Comment")
+      .then((rows) => setCommentOptions(rows.map((row) => row.value)))
+      .catch(() => setCommentOptions([]));
+  }, []);
+
   const [inventory, setInventory] = useState<InventoryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -388,7 +397,7 @@ export default function DatabasePage() {
 
   const handleExportCsv = () => {
     const header =
-      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Screen Type,Status,Import Date,Fault Types,Notes";
+      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Import Date,Fault Types,Notes";
     const lines = inventory.map((item) => {
       const cells = [
         item.assetId,
@@ -741,7 +750,7 @@ export default function DatabasePage() {
                 <th>RAM</th>
                 <th>Storage</th>
                 <th>Speed</th>
-                <th>Comments</th>
+                <th>Comment</th>
                 <th>Status</th>
                 <th>Created At</th>
                 <th className="db-actions-col">Actions</th>
@@ -1027,8 +1036,15 @@ export default function DatabasePage() {
                         onChange={(e) => handleEditFieldChange("screenType", e.target.value)}
                       >
                         <option value="">Select comment</option>
-                        <option value="Touch Screen">Touch Screen</option>
-                        <option value="Non-Touch">Non-Touch</option>
+                        {editForm?.screenType &&
+                          !commentOptions.includes(editForm.screenType) && (
+                            <option value={editForm.screenType}>{editForm.screenType}</option>
+                          )}
+                        {commentOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <label className="db-edit-full-col">

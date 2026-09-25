@@ -22,12 +22,9 @@ import type { ListNumberGroup, SessionInventoryItem } from "./manualStockInTypes
 import { toStockInApiItem, type StockInResult } from "./stockInApi";
 
 // ─── Dropdown-backed option sets ───────────────────────────────────────────────
-// Category, Brand, Processor, Generation, RAM, Storage and Condition are all
-// fetched from GET /dropdowns/active/:category on mount (see loadDropdownOptions
-// below). Comment (screen type) has no backend dropdown category, so it stays
-// a fixed local option set.
-
-const SCREEN_TYPE_OPTIONS = ["Touch Screen", "Non-Touch"];
+// Category, Brand, Processor, Generation, RAM, Storage, Condition and Comment
+// are all fetched from GET /dropdowns/active/:category on mount (see the
+// dropdown-loading effect below). Comment populates the screenType field.
 
 interface DropdownRow {
   id: number;
@@ -45,6 +42,7 @@ interface DropdownOptions {
   ram: string[];
   storage: string[];
   condition: string[];
+  comment: string[];
 }
 
 const blankDropdownOptions: DropdownOptions = {
@@ -55,6 +53,7 @@ const blankDropdownOptions: DropdownOptions = {
   ram: [],
   storage: [],
   condition: [],
+  comment: [],
 };
 
 // LCD only needs Brand, Model, Comment, Quantity — no tech-spec fields
@@ -161,9 +160,10 @@ export default function ManualStockInPage() {
       fetchValues("RAM"),
       fetchValues("Storage"),
       fetchValues("Condition"),
+      fetchValues("Comment"),
     ])
-      .then(([category, brand, processor, generation, ram, storage, condition]) => {
-        setDropdownOptions({ category, brand, processor, generation, ram, storage, condition });
+      .then(([category, brand, processor, generation, ram, storage, condition, comment]) => {
+        setDropdownOptions({ category, brand, processor, generation, ram, storage, condition, comment });
       })
       .finally(() => setDropdownsLoading(false));
   }, []);
@@ -850,9 +850,12 @@ export default function ManualStockInPage() {
               name="screenType"
               value={form.screenType}
               onChange={handleChange}
+              disabled={dropdownsLoading}
             >
-              <option value="">Select screen type</option>
-              {SCREEN_TYPE_OPTIONS.map((opt) => (
+              <option value="">
+                {dropdownsLoading ? "Loading..." : "Select comment"}
+              </option>
+              {dropdownOptions.comment.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt}
                 </option>

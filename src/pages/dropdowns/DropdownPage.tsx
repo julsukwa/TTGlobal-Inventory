@@ -2,7 +2,7 @@
 //
 // Admin screen for managing the fixed value lists used throughout the system
 // (Item Type, Fault, Vendor, Brand, RAM, Storage, Processor, Condition,
-// Generation) — e.g. the category/condition options offered during Stock In.
+// Generation, Comment) — e.g. the category/condition options offered during Stock In.
 // Backed by the real /dropdowns API for every category except Vendor: vendors
 // are a real entity with their own table (Shipment.vendorId is a foreign key
 // into it), not a free-text DropdownValue, so the Vendor tab reads/writes the
@@ -33,6 +33,7 @@ import {
   HardDrive,
   Sparkles,
   Layers,
+  MessageSquare,
 } from "lucide-react";
 
 import { apiFetch, ApiError } from "../../services/api";
@@ -50,6 +51,7 @@ const DROPDOWN_CATEGORIES = [
   { id: "processor", name: "Processor" },
   { id: "condition", name: "Condition" },
   { id: "generation", name: "Generation" },
+  { id: "comment", name: "Comment" },
 ];
 
 // Maps this page's local category ids to the `category` string the backend
@@ -65,6 +67,7 @@ const BACKEND_CATEGORY: Record<string, string> = {
   processor: "Processor",
   condition: "Condition",
   generation: "Generation",
+  comment: "Comment",
 };
 
 interface DropdownValue {
@@ -124,6 +127,7 @@ const categoryIcons = {
   processor: <Cpu size={18} />,
   condition: <Sparkles size={18} />,
   generation: <Layers size={18} />,
+  comment: <MessageSquare size={18} />,
 };
 
 function DropdownPage() {

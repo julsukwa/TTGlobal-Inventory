@@ -305,7 +305,7 @@ export default function FaultyStockPage() {
 
   const handleExportCsv = () => {
     const header =
-      "Asset ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Screen Type,Fault Types,Date Marked Faulty,Adjusted By,Shipment ID,Batch ID,List Number,Notes";
+      "Asset ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Fault Types,Date Marked Faulty,Adjusted By,Shipment ID,Batch ID,List Number,Notes";
     const lines = filteredItems.map((item) => {
       const cells = [
         item.assetId,
@@ -485,7 +485,7 @@ export default function FaultyStockPage() {
                 <th>RAM</th>
                 <th>Storage</th>
                 <th>Speed</th>
-                <th>Comments</th>
+                <th>Comment</th>
                 <th>Status</th>
                 <th>Faults</th>
                 <th>Created At</th>

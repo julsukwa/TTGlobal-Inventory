@@ -446,7 +446,7 @@ export default function InventoryPage() {
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExportCsv = () => {
     const header =
-      "List Number,Asset ID,Batch ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comments,Status,Import Date";
+      "List Number,Asset ID,Batch ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Import Date";
     const lines = items.map((item) => {
       const cells = [
         item.listNumber,
@@ -695,7 +695,7 @@ export default function InventoryPage() {
                 <th>RAM</th>
                 <th>Storage</th>
                 <th>Speed</th>
-                <th>Comments</th>
+                <th>Comment</th>
                 <th>Status</th>
                 <th>Import Date</th>
                 <th className="inv-actions-col">Actions</th>
