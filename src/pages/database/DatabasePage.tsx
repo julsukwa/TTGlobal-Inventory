@@ -35,6 +35,13 @@ import { toInventoryAsset } from "./databaseTypes";
 import type { InventoryAsset, BackendInventoryItem, InventoryStats } from "./databaseTypes";
 import { apiFetch } from "../../services/api";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
+import {
+  exportToExcel,
+  STOCK_EXPORT_HEADERS,
+  STOCK_EXPORT_COLUMN_WIDTHS,
+  STOCK_EXPORT_BOLD_COLUMNS,
+  todayForFilename,
+} from "../../utils/exportToExcel";
 
 import { Pagination, Button, Modal, StickerPrintPreview, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
@@ -405,43 +412,31 @@ export default function DatabasePage() {
 
   // ── Export ────────────────────────────────────────────────────────────────
 
-  const handleExportCsv = () => {
-    const header =
-      "Asset ID,ID Source,List Number,Batch ID,Shipment ID,Vendor ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Fault Types,Import Date,Notes";
-    const lines = inventory.map((item) => {
-      const cells = [
-        item.assetId,
-        item.assetIdSource,
-        item.listNumber,
-        item.batchId,
-        item.shipmentId,
-        item.vendorId,
-        item.category,
-        item.brand,
-        item.model,
-        item.processor,
-        item.generation,
-        item.ram,
-        item.storage,
-        item.speed,
-        item.screenType,
-        item.status,
-        item.faultTypes?.join(", ") ?? "",
-        item.importDate,
-        item.notes,
-      ];
-      return cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",");
+  const handleExportExcel = async () => {
+    const rows = inventory.map((item) => [
+      item.listNumber,
+      item.category,
+      item.condition,
+      item.assetId,
+      item.brand,
+      item.model,
+      item.processor,
+      item.generation,
+      item.speed,
+      item.ram,
+      item.storage,
+      item.screenType,
+      item.status,
+      item.faultTypes?.join(", ") ?? "",
+    ]);
+
+    await exportToExcel({
+      headers: STOCK_EXPORT_HEADERS,
+      rows,
+      columnWidths: STOCK_EXPORT_COLUMN_WIDTHS,
+      boldColumns: STOCK_EXPORT_BOLD_COLUMNS,
+      filename: `TTG_Database_Export_${todayForFilename()}.xlsx`,
     });
-    const csvContent = [header, ...lines].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "inventory_database.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   // No PDF library is part of this project yet, so this uses the browser's
@@ -485,9 +480,9 @@ export default function DatabasePage() {
           <p>View, search and manage all inventory records in the system.</p>
         </div>
         <div className="db-header-actions">
-          <Button variant="secondary" onClick={handleExportCsv}>
+          <Button variant="secondary" onClick={handleExportExcel}>
             <Download size={16} />
-            Export CSV
+            Export Excel
           </Button>
           <Button variant="secondary" onClick={handleExportPdf}>
             <Download size={16} />

@@ -37,6 +37,13 @@ import { apiFetch } from "../../services/api";
 import { useStickerPrint } from "../../hooks/useStickerPrint";
 import { Pagination, Button, Modal, StickerPrintPreview, ListNumberBadge } from "../../components/ui";
 import type { AssetStickerProps } from "../../components/ui";
+import {
+  exportToExcel,
+  STOCK_EXPORT_HEADERS,
+  STOCK_EXPORT_COLUMN_WIDTHS,
+  STOCK_EXPORT_BOLD_COLUMNS,
+  todayForFilename,
+} from "../../utils/exportToExcel";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -460,39 +467,31 @@ export default function InventoryPage() {
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
-  const handleExportCsv = () => {
-    const header =
-      "List Number,Asset ID,Batch ID,Category,Brand,Model,Processor,Generation,RAM,Storage,Speed,Comment,Status,Fault Types,Import Date";
-    const lines = items.map((item) => {
-      const cells = [
-        item.listNumber,
-        item.assetId,
-        item.batchId,
-        item.category,
-        item.brand,
-        item.model,
-        item.processor,
-        item.generation,
-        item.ram,
-        item.storage,
-        item.speed,
-        item.screenType,
-        item.status,
-        item.faultTypes?.join(", ") ?? "",
-        item.importDate,
-      ];
-      return cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",");
+  const handleExportExcel = async () => {
+    const rows = items.map((item) => [
+      item.listNumber,
+      item.category,
+      item.condition,
+      item.assetId,
+      item.brand,
+      item.model,
+      item.processor,
+      item.generation,
+      item.speed,
+      item.ram,
+      item.storage,
+      item.screenType,
+      item.status,
+      item.faultTypes?.join(", ") ?? "",
+    ]);
+
+    await exportToExcel({
+      headers: STOCK_EXPORT_HEADERS,
+      rows,
+      columnWidths: STOCK_EXPORT_COLUMN_WIDTHS,
+      boldColumns: STOCK_EXPORT_BOLD_COLUMNS,
+      filename: `TTG_Inventory_Export_${todayForFilename()}.xlsx`,
     });
-    const csvContent = [header, ...lines].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "available_inventory.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const rangeStart = items.length === 0 ? 0 : startIndex + 1;
@@ -507,9 +506,9 @@ export default function InventoryPage() {
           <p>All inventory physically present in the company. Issued items are not shown.</p>
         </div>
         <div className="inv-header-actions">
-          <Button variant="secondary" onClick={handleExportCsv}>
+          <Button variant="secondary" onClick={handleExportExcel}>
             <Download size={16} />
-            Export CSV
+            Export Excel
           </Button>
         </div>
       </div>
