@@ -478,6 +478,7 @@ export default function FaultyStockPage() {
                 <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
+                <th>Condition</th>
                 <th>Brand</th>
                 <th>Model</th>
                 <th>Processor</th>
@@ -495,19 +496,19 @@ export default function FaultyStockPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={16} className="fs-empty-row">
+                  <td colSpan={17} className="fs-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={16} className="fs-empty-row">
+                  <td colSpan={17} className="fs-empty-row">
                     Failed to load faulty stock: {error}
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="fs-empty-row">
+                  <td colSpan={17} className="fs-empty-row">
                     No faulty items match your search/filters.
                   </td>
                 </tr>
@@ -524,6 +525,7 @@ export default function FaultyStockPage() {
                     <td>
                       <span className="fs-category-badge">{item.category}</span>
                     </td>
+                    <td>{item.condition || "—"}</td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="fs-specs-cell">{item.processor || "—"}</td>

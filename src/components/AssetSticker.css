@@ -17,13 +17,32 @@
   break-inside: avoid;
 }
 
-/* Text area and QR are absolutely positioned so the QR can never overlap text,
-   whatever the content length. A 2mm safe margin on every side keeps content
-   clear of the label's curved corners. */
-.asset-sticker-info {
+/* Title row spans the full sticker width (46mm, 2mm margins each side) so
+   the name is never squeezed into the narrower text column below — the QR
+   code only needs to be dodged by the category/specs/ID block, not the
+   title. It sits directly above .asset-sticker-info, which starts right
+   after it (top: 6mm = 2mm margin + 3.5mm title + 0.5mm gap). */
+.asset-sticker-title-row {
   position: absolute;
   left: 2mm;
   top: 2mm;
+  right: 2mm;
+  height: 3.5mm;
+}
+
+.asset-sticker-title {
+  display: block;
+  overflow: hidden;
+}
+
+/* Text area and QR are absolutely positioned so the QR can never overlap text,
+   whatever the content length. A 2mm safe margin keeps content clear of the
+   label's curved corners on the left/right/bottom; the top margin instead
+   starts right below the title row (see above). */
+.asset-sticker-info {
+  position: absolute;
+  left: 2mm;
+  top: 6mm;
   right: 17mm;
   bottom: 2mm;
   display: flex;
@@ -38,23 +57,12 @@
   overflow: hidden;
 }
 
-.asset-sticker-title {
-  font-size: 8pt;
-  font-weight: 700;
-  line-height: 1.1;
-  margin-bottom: 0.3mm;
-  color: #000000;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .asset-sticker-category {
   font-size: 5pt;
   font-weight: 600;
   line-height: 1.1;
   margin-bottom: 0.3mm;
-  color: #000000;
+  color: #111111;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -79,11 +87,11 @@
 }
 
 .asset-sticker-asset-id {
-  font-family: "Courier New", Courier, monospace;
-  font-size: 9pt;
-  font-weight: 700;
+  font-family: "Courier New", monospace;
+  font-size: 9.5pt;
+  font-weight: bold;
   line-height: 1.1;
-  margin-bottom: 0.3mm;
+  margin-bottom: 0.5mm;
   color: #000000;
   white-space: nowrap;
   overflow: hidden;
@@ -92,9 +100,9 @@
 
 .asset-sticker-batch {
   font-size: 5pt;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.1;
-  color: #000000;
+  color: #050505;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -110,9 +118,9 @@
      transforms are unreliable in some print rasterization pipelines with a
      small fixed @page size. The sticker's dimensions are fixed, so a plain
      top offset centers it identically without needing a transform. */
-  top: 6mm;
-  width: 13mm;
-  height: 13mm;
+  top: 8mm;
+  width: 12mm;
+  height: 12mm;
 }
 
 .asset-sticker-qr svg {
@@ -134,6 +142,17 @@
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  .asset-sticker-title text {
+    fill: #000000 !important;
+  }
+
+  .asset-sticker-category,
+  .asset-sticker-processor,
+  .asset-sticker-specs,
+  .asset-sticker-screen {
+    color: #000000 !important;
   }
 
   .asset-sticker-asset-id {

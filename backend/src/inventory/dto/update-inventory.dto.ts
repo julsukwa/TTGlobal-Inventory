@@ -1,4 +1,5 @@
 export class UpdateInventoryDto {
+  condition?: string;
   brand?: string;
   model?: string;
   processor?: string;

@@ -164,6 +164,7 @@ export class InventoryService {
     const item = await this.prisma.inventoryItem.update({
       where: { assetId },
       data: {
+        ...(dto.condition !== undefined ? { condition: dto.condition } : {}),
         ...(dto.brand !== undefined ? { brand: dto.brand } : {}),
         ...(dto.model !== undefined ? { model: dto.model } : {}),
         ...(dto.processor !== undefined ? { processor: dto.processor } : {}),

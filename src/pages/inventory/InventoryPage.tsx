@@ -74,6 +74,7 @@ function toStickerProps(item: AvailableInventoryItem): AssetStickerProps {
 }
 
 const blankDetailsForm = {
+  condition: "",
   brand: "",
   model: "",
   processor: "",
@@ -114,6 +115,7 @@ export default function InventoryPage() {
   const [generations, setGenerations] = useState<string[]>([]);
   const [rams, setRams] = useState<string[]>([]);
   const [storages, setStorages] = useState<string[]>([]);
+  const [conditions, setConditions] = useState<string[]>([]);
   const [activeFaultTypes, setActiveFaultTypes] = useState<string[]>([]);
 
   useEffect(() => {
@@ -130,15 +132,28 @@ export default function InventoryPage() {
       fetchValues("Generation"),
       fetchValues("RAM"),
       fetchValues("Storage"),
-    ]).then(([categoryValues, brandValues, faultValues, processorValues, generationValues, ramValues, storageValues]) => {
-      setCategories(categoryValues);
-      setBrands(brandValues);
-      setActiveFaultTypes(faultValues);
-      setProcessors(processorValues);
-      setGenerations(generationValues);
-      setRams(ramValues);
-      setStorages(storageValues);
-    });
+      fetchValues("Condition"),
+    ]).then(
+      ([
+        categoryValues,
+        brandValues,
+        faultValues,
+        processorValues,
+        generationValues,
+        ramValues,
+        storageValues,
+        conditionValues,
+      ]) => {
+        setCategories(categoryValues);
+        setBrands(brandValues);
+        setActiveFaultTypes(faultValues);
+        setProcessors(processorValues);
+        setGenerations(generationValues);
+        setRams(ramValues);
+        setStorages(storageValues);
+        setConditions(conditionValues);
+      }
+    );
   }, []);
 
   // ── Fetch — status/listNumber/category/brand are applied server-side;
@@ -271,6 +286,7 @@ export default function InventoryPage() {
     setOpenMenuId(null);
     setDetailsEditTarget(item);
     setDetailsForm({
+      condition: item.condition,
       brand: item.brand,
       model: item.model,
       processor: item.processor,
@@ -688,6 +704,7 @@ export default function InventoryPage() {
                 <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
+                <th>Condition</th>
                 <th>Brand</th>
                 <th>Model</th>
                 <th>Processor</th>
@@ -704,19 +721,19 @@ export default function InventoryPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={15} className="inv-empty-row">
+                  <td colSpan={16} className="inv-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={15} className="inv-empty-row">
+                  <td colSpan={16} className="inv-empty-row">
                     Failed to load inventory: {error}
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="inv-empty-row">
+                  <td colSpan={16} className="inv-empty-row">
                     No inventory items match your search/filters.
                   </td>
                 </tr>
@@ -735,6 +752,7 @@ export default function InventoryPage() {
                     <td>
                       <span className="inv-category-badge">{item.category}</span>
                     </td>
+                    <td>{item.condition || "—"}</td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="inv-specs-cell">{item.processor || "—"}</td>
@@ -1027,6 +1045,23 @@ export default function InventoryPage() {
         {detailsEditTarget && (
           <>
             <div className="inv-form-grid">
+              <div className="form-field">
+                <label>Condition</label>
+                <select
+                  value={detailsForm.condition}
+                  onChange={(e) => updateDetailsForm("condition", e.target.value)}
+                >
+                  <option value="">Select condition</option>
+                  {detailsForm.condition && !conditions.includes(detailsForm.condition) && (
+                    <option value={detailsForm.condition}>{detailsForm.condition}</option>
+                  )}
+                  {conditions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="form-field">
                 <label>Brand</label>
                 <input

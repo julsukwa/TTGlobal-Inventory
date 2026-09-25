@@ -90,6 +90,15 @@ export default function DatabasePage() {
       .catch(() => setCommentOptions([]));
   }, []);
 
+  // Condition options for the edit drawer, from the Dropdowns module.
+  const [conditionOptions, setConditionOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch<{ value: string }[]>("/dropdowns/active/Condition")
+      .then((rows) => setConditionOptions(rows.map((row) => row.value)))
+      .catch(() => setConditionOptions([]));
+  }, []);
+
   const [inventory, setInventory] = useState<InventoryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -343,6 +352,7 @@ export default function DatabasePage() {
         {
           method: "PATCH",
           body: JSON.stringify({
+            condition: editForm.condition,
             brand: editForm.brand,
             model: editForm.model,
             processor: editForm.processor,
@@ -743,6 +753,7 @@ export default function DatabasePage() {
                 <th>Asset ID</th>
                 <th>Batch ID</th>
                 <th>Category</th>
+                <th>Condition</th>
                 <th>Brand</th>
                 <th>Model</th>
                 <th>Processor</th>
@@ -759,19 +770,19 @@ export default function DatabasePage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={15} className="db-empty-row">
+                  <td colSpan={16} className="db-empty-row">
                     Loading...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={15} className="db-empty-row">
+                  <td colSpan={16} className="db-empty-row">
                     Failed to load inventory: {error}
                   </td>
                 </tr>
               ) : paginatedAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="db-empty-row">
+                  <td colSpan={16} className="db-empty-row">
                     No inventory records match your search/filters.
                   </td>
                 </tr>
@@ -788,6 +799,7 @@ export default function DatabasePage() {
                     <td>
                       <span className="db-category-badge">{item.category}</span>
                     </td>
+                    <td>{item.condition || "—"}</td>
                     <td>{item.brand}</td>
                     <td>{item.model}</td>
                     <td className="db-specs-cell">{item.processor || "—"}</td>
@@ -978,7 +990,21 @@ export default function DatabasePage() {
                     </label>
                     <label>
                       Condition
-                      <input value={selectedAsset.condition || "—"} disabled title="Protected field" />
+                      <select
+                        value={editForm?.condition ?? ""}
+                        onChange={(e) => handleEditFieldChange("condition", e.target.value)}
+                      >
+                        <option value="">Select condition</option>
+                        {editForm?.condition &&
+                          !conditionOptions.includes(editForm.condition) && (
+                            <option value={editForm.condition}>{editForm.condition}</option>
+                          )}
+                        {conditionOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Brand
